@@ -1,5 +1,3 @@
-from curl_cffi import requests
-
 # 百度 https://top.baidu.com/board?tab=realtime
 # 知乎 https://www.zhihu.com/hot
 # 微博 https://weibo.com/ajax/side/hotSearch
@@ -77,4 +75,3 @@ from curl_cffi import requests
 # 澎湃新闻热榜 https://www.thepaper.cn/
 # 新华网新华时政 http://www.news.cn/politics/szlb/index.html
 # 华为新闻 https://www.huawei.com/cn/news
-
