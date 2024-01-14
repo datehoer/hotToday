@@ -7,7 +7,6 @@
 # it之家 https://m.ithome.com/rankm/
 # 哔哩哔哩 https://www.bilibili.com/v/popular/all/
 # 抖音热点 https://www.douyin.com/
-# 煎蛋7日热榜 https://jandan.net/top-7days
 # AcFun https://www.acfun.cn/rank/list/?cid=-1&pcid=-1&range=DAY
 # 吾爱破解人气热门 https://www.52pojie.cn/forum.php?mod=guide&view=hot
 # 贴吧热议 https://tieba.baidu.com/hottopic/browse/topicList?res_type=1
