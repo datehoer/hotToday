@@ -30,6 +30,7 @@ for tab in hot_tabs:
     title = tab.find("h3").text()
     data.append({
         "title": title,
-        "url": url
+        "url": url,
+        "hotScore": 0
     })
 print(data)

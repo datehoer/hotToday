@@ -14,7 +14,7 @@ for item in rank_day:
     hotScore = 0
     data.append({
         "title": title,
-        "link": link,
+        "url": link,
         "hotScore": hotScore
     })
 print(data)

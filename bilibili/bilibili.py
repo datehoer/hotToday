@@ -27,7 +27,7 @@ for j in res_json['data']['list']:
     hotScore = 0
     data.append({
         "title": title,
-        "link": link,
+        "url": link,
         "hotScore": hotScore
     })
 print(data)

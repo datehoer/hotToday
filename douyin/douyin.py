@@ -27,7 +27,7 @@ if "data" in res_json:
             hotScore = word['hot_value']
             data.append({
                 "title": title,
-                "link": link,
+                "url": link,
                 "hotScore": hotScore
             })
 

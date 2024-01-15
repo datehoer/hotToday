@@ -24,7 +24,8 @@ for article in article_box:
                 next_element = next_element.next()
             data_list.append({
                 "url": h3_url,
-                "title": title
+                "title": title,
+                "hotScore": 0
             })
         print(data_list)
         break
