@@ -20,7 +20,7 @@
 # 开眼 https://m.eyepetizer.net/
 # 宽带山人气排行榜24小时 https://club.kdslife.com/f_15.html
 # 豆瓣电影一周口碑榜、北美票房榜 https://movie.douban.com/chart
-# 微信读书榜单 https://weread.qq. com/web/category/rising
+# 微信读书榜单 https://weread.qq.com/web/category/rising
 # 起点榜单 https://www.qidian.com/rank/
 # 纵横中文网榜单 https://www.zongheng.com/rank?nav=default
 # taptap榜单 https://www.taptap.cn/top/download
