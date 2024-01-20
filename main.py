@@ -25,7 +25,6 @@
 # 纵横中文网榜单 https://www.zongheng.com/rank?nav=default
 # taptap榜单 https://www.taptap.cn/top/download
 # 3dm游戏排行榜 https://www.3dmgame.com/phb.html
-# 懂球帝 https://www.dongqiudi.com/articles
 # 新浪体育热门 https://sports.sina.com.cn/
 # 人人都是产品经理 https://www.woshipm.com/
 # PMCAFF精选 https://coffee.pmcaff.com/?type=2
