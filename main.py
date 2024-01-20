@@ -28,7 +28,6 @@
 # 新浪体育热门 https://sports.sina.com.cn/
 # 人人都是产品经理 https://www.woshipm.com/
 # PMCAFF精选 https://coffee.pmcaff.com/?type=2
-# producthunt https://www.producthunt.com/
 # GitHub今天最兴奋的 https://github.com/trending
 # CSDN排行榜 https://blog.csdn.net/rank/list
 # 掘金排行榜 https://juejin.cn/hot/articles
