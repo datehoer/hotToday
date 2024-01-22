@@ -42,7 +42,6 @@
 # freebuf资讯 https://www.freebuf.com/news
 # 安全客头条资讯 https://www.anquanke.com/
 # 电商报7*24快讯 https://www.dsb.cn/news
-# 运营派热门文章 https://www.yunyingpai.com/
 # 游戏葡萄文章 https://youxiputao.com/article.html
 # 白鲸出海7*24 https://www.baijing.cn/newsflashes_txzq/
 # 谷歌实时搜索趋势 https://trends.google.com/trends/api/realtimetrends?hl=zh-CN&tz=-480&cat=all&fi=0&fs=0&geo=US&ri=300&rs=20&sort=0
