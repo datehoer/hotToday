@@ -23,7 +23,7 @@ def get_data(href, rank_type):
     return results
 
 
-def get_hot_search():
+def get_dongchedi_hot_search():
     hot_search_url = "https://www.dongchedi.com/news/dynamic_motor_car"
     res = requests.get(hot_search_url)
     doc = pyquery.PyQuery(res.content)
@@ -50,4 +50,4 @@ article_params = {
 # video_list = get_data("https://www.dongchedi.com/video/", "pgc_video_total_rank")
 # article_list = get_data("https://www.dongchedi.com/article/", "pgc_article_total_rank")
 # print(article_list)
-print(get_hot_search())
+# print(get_hot_search())
