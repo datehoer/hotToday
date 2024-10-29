@@ -25,4 +25,3 @@ def get_youshedubao_data():
     uisdc_news = re.findall('var uisdc_news="(.*?)";', items)[0]
     uisdc_news = json.loads(uisdc_news.replace('\\"', '"').replace("\\\\", "\\"))
     return {"data": uisdc_news}
-get_youshedubao_data()

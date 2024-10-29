@@ -21,7 +21,7 @@ def get_hupu_data():
             hotScore = 0
             data.append({
                 "title": title,
-                "link": link,
+                "url": link,
                 "hotScore": hotScore
             })
     return {"data": data}

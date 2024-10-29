@@ -14,7 +14,7 @@ def get_qichezhijia_data():
         hotScore = item.find("span.result").text()
         data.append({
             "title": title,
-            "href": urljoin(url, href),
+            "url": urljoin(url, href),
             "hotScore": hotScore
         })
     return {"data":data}
