@@ -32,4 +32,4 @@ def get_github_data():
             "url": link,
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

@@ -15,6 +15,8 @@ def get_hupu_data():
         wrap = item.find(".list-wrap")
         if wrap is not None:
             title = wrap.find("a>span").text()
+            if title == "":
+                continue
             link = urljoin(url, wrap.find("a").attr("href"))
             hotScore = 0
             data.append({
@@ -22,4 +24,4 @@ def get_hupu_data():
                 "link": link,
                 "hotScore": hotScore
             })
-    return data
+    return {"data": data}

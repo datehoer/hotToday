@@ -21,4 +21,4 @@ def get_freebuf_data():
             "hotScore": hotScore,
             "url": href
         })
-    return data
+    return {"data": data}

@@ -38,4 +38,4 @@ def get_36kr_data():
         res = requests.get(link)
         soup = pyquery.PyQuery(res.content)
         data.extend(analysis_detail(soup))
-    return data
+    return {"data":data}

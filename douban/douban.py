@@ -28,4 +28,4 @@ def get_douban_movie_data():
                 "hotScore": hotScore
             })
         data.append(ww)
-    return data
+    return {"data": data}

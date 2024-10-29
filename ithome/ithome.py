@@ -18,4 +18,4 @@ def get_ithome_data():
             "url": link,
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

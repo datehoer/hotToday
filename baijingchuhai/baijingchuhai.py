@@ -17,5 +17,5 @@ def get_baijingchuhai_data():
             "url": link,
             "hotScore": hotScore
         })
-    return data
+    return {"data": data}
     

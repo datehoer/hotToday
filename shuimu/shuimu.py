@@ -20,4 +20,4 @@ def get_shuimu_data():
             "url": urljoin(url, link),
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

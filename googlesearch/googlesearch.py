@@ -15,4 +15,4 @@ def get_googlesearch_data():
             link = article['url']
             hotScore = 0
         data_list.append({'title': title, 'url': link, 'hotScore': hotScore})
-    return data_list
+    return {"data": data_list}

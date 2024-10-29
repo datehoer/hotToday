@@ -22,8 +22,7 @@ def get_huxiu_data():
         "Referer": "https://www.huxiu.com/article/",
         "Referrer-Policy": "strict-origin-when-cross-origin"
     }
-    proxy = {'http://': "http://127.0.0.1:7890", 'https://': "http://127.0.0.1:7890"}
-    res = httpx.get(url, headers=headers, verify=False, proxies=proxy)
+    res = httpx.get(url, headers=headers, verify=False)
     doc = pyquery.PyQuery(res.content)
     data = []
     hot_tabs = doc(".hot-article-wrap>.article-wrap>div").items()
@@ -35,4 +34,4 @@ def get_huxiu_data():
             "url": url,
             "hotScore": 0
         })
-    return data
+    return {"data":data}

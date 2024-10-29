@@ -21,4 +21,4 @@ def fetch_52pj_data():
             "url": link,
             "hotScore": hotScore
         })
-    return data
+    return {"data": data}

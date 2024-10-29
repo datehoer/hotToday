@@ -20,7 +20,7 @@ def get_data(href, rank_type):
             link = href + result['group_id']
             hotScore = result['count']
             results.append({"title": title, "url": link, "hotScore": hotScore})
-    return results
+    return {"data": results}
 
 
 def get_dongchedi_hot_search():
@@ -34,7 +34,7 @@ def get_dongchedi_hot_search():
         link = urljoin(hot_search_url, item("a").attr("href"))
         hotScore = 0
         data.append({"title": title, "url": link, "hotScore": hotScore})
-    return data
+    return {"data": data}
 
 
 video_params = {

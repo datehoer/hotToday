@@ -33,4 +33,4 @@ def get_rank_list():
             "url": urljoin(url, link),
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

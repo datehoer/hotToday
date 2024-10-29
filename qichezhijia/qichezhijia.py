@@ -17,4 +17,4 @@ def get_qichezhijia_data():
             "href": urljoin(url, href),
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

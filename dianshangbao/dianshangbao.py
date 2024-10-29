@@ -1,5 +1,6 @@
 from curl_cffi import requests
 import pyquery
+from urllib.parse import urljoin
 def get_dianshangbao_data():
     url = "https://www.dsb.cn/news"
     res = requests.get(url)
@@ -12,7 +13,7 @@ def get_dianshangbao_data():
         hotScore = 0
         data.append({
             "title": title,
-            "url": link,
+            "url": urljoin(url, link),
             "hotScore": hotScore
         })
-    return data
+    return {"data": data}

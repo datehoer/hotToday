@@ -18,4 +18,4 @@ def get_kuandaishan_data():
             "title": title,
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

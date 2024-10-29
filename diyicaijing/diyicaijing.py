@@ -18,4 +18,4 @@ def get_diyicaijing_data():
             'url': link,
             'hotScore': hotScore
         })
-    return hot_data
+    return {"data": hot_data}

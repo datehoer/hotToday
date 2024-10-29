@@ -13,4 +13,4 @@ def get_kanxue_data():
             "url": urljoin(url, item.attr("href")),
             "hotScore": 0
         })
-    return data
+    return {"data":data}

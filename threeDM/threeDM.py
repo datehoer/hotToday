@@ -15,4 +15,4 @@ def get_3dm_data():
             "url": link,
             "hotScore": hotScore
         })
-    return data
+    return {"data":data}

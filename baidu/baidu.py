@@ -24,5 +24,5 @@ def get_baidu_data():
                 "title": title,
                 "hotScore": hotScore
             })
-    return hot_data
+    return {"data": hot_data}
     

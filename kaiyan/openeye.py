@@ -20,19 +20,4 @@ def get_openeye_data():
         "page_type": "card"
     })
     res_json = res.json()
-    data = []
-    items = res_json.get("result", [])
-    for item in items.get("card_list", []):
-        metro_list = item['card_data']['body'].get('metro_list', [])
-        for metro in metro_list:
-            title = metro['metro_data'].get('title', "")
-            if title == "":
-                continue
-            link = metro['link']
-            hotScore = metro['metro_data']['hot_value']
-            data.append({
-                "title": title,
-                "url": link,
-                "hotScore": hotScore
-            })
-    return data
+    return res_json
