@@ -7,7 +7,7 @@ def get_hupu_data():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     }
     res = requests.get(url, headers=headers)
-    doc = pyquery.PyQuery(res.content)
+    doc = pyquery.PyQuery(res.text)
     items = doc(".text-list-model>div").items()
     data = []
 
