@@ -36,6 +36,10 @@ from youshedubao.youshedubao import get_youshedubao_data
 from youxiputao.youxiputao import get_youxiputao_data
 from zhanku.zhanku import get_zhanku_data
 from zongheng.zongheng import get_zongheng_data
+from coolan.coolan import get_cool
+from hacknews.hacknews import get_hacker_news
+from historytoday.historyday import get_history_today
+from wallstreetcn.wallstreetcn import get_wallstreetcn_data
 from pymongo import MongoClient
 import time
 import httpx
@@ -254,6 +258,10 @@ if __name__ == "__main__":
         safe_insert("youxiputao", get_youxiputao_data)
         safe_insert("zhanku", get_zhanku_data)
         safe_insert("zongheng", get_zongheng_data)
+        safe_insert("coolan", get_cool)
+        safe_insert("hacknews", get_hacker_news)
+        safe_insert("historytoday", get_history_today)
+        safe_insert("wallstreetcn", get_wallstreetcn_data)
 
     finally:
         client.close()
