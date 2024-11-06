@@ -12,4 +12,4 @@ def get_history_today():
             "url": "",
             "hotScore": 0
         })
-    return data
+    return {"data": data}

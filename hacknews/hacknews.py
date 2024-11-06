@@ -14,4 +14,4 @@ def get_hacker_news():
             "title": title,
             "hotScore": 0
         })
-    return data
+    return {"data": data}
