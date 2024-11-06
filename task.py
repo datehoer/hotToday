@@ -258,7 +258,7 @@ if __name__ == "__main__":
         safe_insert("youxiputao", get_youxiputao_data)
         safe_insert("zhanku", get_zhanku_data)
         safe_insert("zongheng", get_zongheng_data)
-        safe_insert("coolan", get_cool)
+        # safe_insert("coolan", get_cool)
         safe_insert("hacknews", get_hacker_news)
         safe_insert("historytoday", get_history_today)
         safe_insert("wallstreetcn", get_wallstreetcn_data)
