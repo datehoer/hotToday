@@ -19,13 +19,17 @@ def get_sina_data():
                 d = json.loads(d)
                 if "data" in d:
                     items = d['data']['data']['hotList']
+                    seen_urls = set()
                     for item in items:
                         title = item['info']['title']
                         url = "https://so.sina.cn/search/list.d.html?keyword=" + title
+                        if url in seen_urls:
+                            continue
+                        seen_urls.add(url)
                         hotScore = item['info']['hotValue']
                         data.append({
                             "title": title,
                             "url": url,
                             "hotScore": hotScore
                         })
-    return {"data":data}
+    return {"data": data}

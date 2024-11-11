@@ -43,6 +43,7 @@ def get_sina_news():
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     }
     data = []
+    seen_urls = set()  # Track seen URLs
 
     for param in params:
         res = requests.get(url, params=param, headers=headers)
@@ -52,10 +53,13 @@ def get_sina_news():
             for item in all_1_data['data']:
                 title = item['title']
                 link = item['url']
-                hotScore = item['top_num'].replace(",", '')
-                data.append({
-                    "title": title,
-                    "url": link,
-                    "hotScore": hotScore
-                })
-    return {"data":data}
+                # Only add if URL hasn't been seen before
+                if link not in seen_urls:
+                    hotScore = item['top_num'].replace(",", '')
+                    data.append({
+                        "title": title,
+                        "url": link,
+                        "hotScore": hotScore
+                    })
+                    seen_urls.add(link)
+    return {"data": data}
