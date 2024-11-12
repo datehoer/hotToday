@@ -40,6 +40,7 @@ from coolan.coolan import get_cool
 from hacknews.hacknews import get_hacker_news
 from historytoday.historyday import get_history_today
 from wallstreetcn.wallstreetcn import get_wallstreetcn_data
+from pengpai.pengpaihot import get_pengpai_hot
 from pymongo import MongoClient
 import time
 import httpx
@@ -220,6 +221,7 @@ if __name__ == "__main__":
                 print(f"Error inserting {collection_name} data: {e}")
 
         # 通过 safe_insert 函数插入数据
+        safe_insert("pengpai", get_pengpai_hot)
         safe_insert("3dm", get_3dm_data)
         safe_insert("36kr", get_36kr_data)
         safe_insert("52pj", fetch_52pj_data)
