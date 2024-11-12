@@ -41,6 +41,7 @@ from hacknews.hacknews import get_hacker_news
 from historytoday.historyday import get_history_today
 from wallstreetcn.wallstreetcn import get_wallstreetcn_data
 from pengpai.pengpaihot import get_pengpai_hot
+from crypto_coin.coin import get_crypto_price
 from pymongo import MongoClient
 import time
 import httpx
@@ -222,6 +223,7 @@ if __name__ == "__main__":
 
         # 通过 safe_insert 函数插入数据
         safe_insert("pengpai", get_pengpai_hot)
+        safe_insert("crypto_coin", get_crypto_price)
         safe_insert("3dm", get_3dm_data)
         safe_insert("36kr", get_36kr_data)
         safe_insert("52pj", fetch_52pj_data)
