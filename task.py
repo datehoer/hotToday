@@ -42,6 +42,8 @@ from historytoday.historyday import get_history_today
 from wallstreetcn.wallstreetcn import get_wallstreetcn_data
 from pengpai.pengpaihot import get_pengpai_hot
 from crypto_coin.coin import get_crypto_price
+from ithome.needknow import get_ithome_needknow_data
+from readhub.readhub import get_readhub_data
 from pymongo import MongoClient
 import time
 import httpx
@@ -266,6 +268,8 @@ if __name__ == "__main__":
         safe_insert("hacknews", get_hacker_news)
         safe_insert("historytoday", get_history_today)
         safe_insert("wallstreetcn", get_wallstreetcn_data)
+        safe_insert("readhub", get_readhub_data)
+        safe_insert("needknow", get_ithome_needknow_data)
 
     finally:
         client.close()
