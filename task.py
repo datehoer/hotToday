@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from threeDM.threeDM import get_3dm_data
 from threesixKe.threesixKe import get_36kr_data
 from five2pj.five2pj import fetch_52pj_data
