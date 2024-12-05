@@ -258,7 +258,7 @@ if __name__ == "__main__":
         safe_insert("taptap", get_taptap_data)
         safe_insert("tencent_news", get_tencent_data)
         safe_insert("woshipm", get_woshipm_data)
-        safe_insert("xueqiu", get_xueqiu_data)
+        # safe_insert("xueqiu", get_xueqiu_data)
         safe_insert("yiche", get_yiche_data)
         safe_insert("youshedubao", get_youshedubao_data)
         safe_insert("youxiputao", get_youxiputao_data)
