@@ -10,4 +10,4 @@ def get_linuxdo_data():
     res = requests.get(url, headers=headers)
     doc = pyquery.PyQuery(res.text)
     json_data = json.loads(json.loads(doc("discourse-assets-json>div").attr("data-preloaded"))['topic_list'])['topic_list']['topics']
-    return json_data
+    return {"data":json_data}
