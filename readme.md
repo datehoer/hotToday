@@ -44,7 +44,7 @@ demo: https://hotrank.datehoer.com/
 - 3DM
 - IT之家热榜 (IT Home Hot Rankings)
 - 开眼 (Kaiyan)
-- 看雪热门 (Kanxue Hot Topics)
+- ~~看雪热门 (Kanxue Hot Topics)~~
 - 宽带山热榜 (KDS Hot Rankings)
 - PMCAFF精选 (PMCAFF Featured)
 - 汽车之家热帖榜 (Autohome Hot Posts)
