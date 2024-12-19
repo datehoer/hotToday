@@ -7,7 +7,7 @@ def get_ithome_needknow_data():
 
     res = requests.get(url)
 
-    doc = pyquery.PyQuery(res.content.decode("utf-8"))
+    doc = pyquery.PyQuery(res.content.decode(res.encoding))
     data = []
     rank_day = doc("#d-1").find("a").items()
     for item in rank_day:
@@ -20,3 +20,5 @@ def get_ithome_needknow_data():
             "hotScore": hotScore
         })
     return {"data":data}
+
+print(get_ithome_needknow_data())
