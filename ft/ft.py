@@ -23,9 +23,8 @@ def get_ft_data():
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
-    proxies = {"http": "http://127.0.0.1:7890","https": "http://127.0.0.1:7890"}
     session = requests.Session()
-    res = session.get(url, headers=headers, impersonate="chrome99", proxies=proxies)
+    res = session.get(url, headers=headers, impersonate="chrome99")
     doc = pyquery.PyQuery(res.text)
     items = doc(".o-teaser-collection__list>li a.js-teaser-heading-link").items()
     data = []
