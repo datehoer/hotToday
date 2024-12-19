@@ -52,6 +52,7 @@ from nodeseed.nodeseed import get_nodeseed_data
 from wsj.wsj import get_wsj_data
 from nytimes.nytimes import get_nytimes_data
 from bloomberg.bloomberg import get_bloomberg_data
+from ft.ft import get_ft_data
 from pymongo import MongoClient
 import time
 import httpx
@@ -285,6 +286,6 @@ if __name__ == "__main__":
         safe_insert("wsj", get_wsj_data)
         safe_insert("nytimes", get_nytimes_data)
         safe_insert("bloomberg", get_bloomberg_data)
-
+        safe_insert("ft", get_ft_data)
     finally:
         client.close()
