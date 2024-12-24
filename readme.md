@@ -1,6 +1,7 @@
 ### 今日热榜 (Today's Hot Rankings)
 前后端项目 (Frontend and Backend Project)：
-- 前端 (Frontend): vue2 + element-ui
+
+- 前端 (Frontend): vue2 + element-ui + [iconpark图标库](https://iconpark.oceanengine.com/official)
 - 后端 (Backend): python + fastapi
 - Github: https://github.com/datehoer/hot-rank-web
 
@@ -9,7 +10,7 @@
 (Using requests for data collection, with some data obtained through parameter reverse engineering.
 If you have any questions/requirements, please feel free to create an issue.)
 
-demo: https://hotrank.datehoer.com/
+demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 
 目前采集平台有 (Current Collection Platforms):
 - B站热榜 (Bilibili Hot Rankings)
@@ -44,7 +45,7 @@ demo: https://hotrank.datehoer.com/
 - 3DM
 - IT之家热榜 (IT Home Hot Rankings)
 - 开眼 (Kaiyan)
-- ~~看雪热门 (Kanxue Hot Topics)~~
+- 看雪热门 (Kanxue Hot Topics)
 - 宽带山热榜 (KDS Hot Rankings)
 - PMCAFF精选 (PMCAFF Featured)
 - 汽车之家热帖榜 (Autohome Hot Posts)
@@ -57,10 +58,20 @@ demo: https://hotrank.datehoer.com/
 - TapTap热门 (TapTap Hot Topics)
 - 腾讯新闻热点榜 (Tencent News Hot Rankings)
 - 人人都是产品经理热门 (Woshipm Hot Topics)
-- 雪球热门 (Xueqiu Hot Topics)
+- ~~雪球热门 (Xueqiu Hot Topics)~~
 - 易车热门 (Yiche Hot Topics)
 - 优设读报 (Uisdc News)
 - 游戏葡萄文章推荐 (GameGrape Article Recommendations)
 - 站酷榜单 (Zcool Rankings)
 - 纵横24小时畅销榜 (Zongheng 24h Bestseller Rankings)
 - hacknews
+- 要知
+- [我的博客](https://www.datehoer.com/)
+- Linuxdo
+- v2ex
+- nodeseed
+- hostloc
+- wsl
+- ft
+- nytimes
+- bloomberg
