@@ -69,7 +69,7 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - [我的博客](https://www.datehoer.com/)
 - Linuxdo
 - v2ex
-- nodeseed
+- nodeseek
 - hostloc
 - wsl
 - ft

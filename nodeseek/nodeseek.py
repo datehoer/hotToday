@@ -1,7 +1,7 @@
 from curl_cffi import requests
 import pyquery
 from urllib.parse import urljoin
-def get_nodeseed_data():
+def get_nodeseek_data():
     url = "https://www.nodeseek.com/"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
