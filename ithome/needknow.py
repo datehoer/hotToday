@@ -19,6 +19,4 @@ def get_ithome_needknow_data():
             "url": link,
             "hotScore": hotScore
         })
-    return {"data":data}
-
-print(get_ithome_needknow_data())
+    return {"data": data}

@@ -64,6 +64,8 @@ db = client[MONGO_DB]
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
 }
+
+
 def fetch(url, header):
     retry = 5
     while retry > 0:
@@ -75,10 +77,11 @@ def fetch(url, header):
                 return data
             retry -= 1
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
-        except Exception as e:
+        except Exception as err:
             retry -= 1
-            print("now_time: {}, url: {}, error: {}".format(time.time(), url, str(e)))
+            print("now_time: {}, url: {}, error: {}".format(time.time(), url, str(err)))
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
+
 
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
@@ -96,6 +99,7 @@ def get_zhihu_hot_data():
     zhihu_hot_list.insert_one(data)
     print("zhihu data inserted")
 
+
 def get_douyin_hot_data():
     douyin_hot = db['douyin_hot']
     session = requests.Session()
@@ -107,6 +111,8 @@ def get_douyin_hot_data():
         data['insert_time'] = time.time()
         douyin_hot.insert_one(data)
         print("douyin data inserted")
+
+
 def get_bilibili_hot_data():
     bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking/v2"
     bilibili_hot = db['bilibili_hot']
@@ -143,6 +149,7 @@ def get_tieba_topic():
     tieba.insert_one(data)
     print("tieba topic data inserted")
 
+
 def get_juejin_hot():
     url = "https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot"
     juejin_hot = db['juejin_hot']
@@ -166,6 +173,7 @@ def get_ssp_hot():
     shaoshupai_hot.insert_one(data)
     print("shaoshupai data inserted")
 
+
 def insert_data(collection_name, data):
     """通用数据插入函数"""
     if not data:
@@ -177,9 +185,9 @@ def insert_data(collection_name, data):
     collection.insert_one(data)
     print(f"{collection_name} data inserted")
 
+
 if __name__ == "__main__":
     try:
-        # 现有的直接插入MongoDB的函数
         try:
             get_toutiao_hot()
         except Exception as e:
