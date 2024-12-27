@@ -6,8 +6,8 @@ def get_ithome_needknow_data():
     url = "https://www.ithome.com/block/rank.html"
 
     res = requests.get(url)
-
-    doc = pyquery.PyQuery(res.content.decode("utf-8"))
+    res.encoding = res.apparent_encoding
+    doc = pyquery.PyQuery(res.text)
     data = []
     rank_day = doc("#d-1").find("a").items()
     for item in rank_day:
