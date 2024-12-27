@@ -45,6 +45,14 @@ from pengpai.pengpaihot import get_pengpai_hot
 from crypto_coin.coin import get_crypto_price
 from ithome.needknow import get_ithome_needknow_data
 from readhub.readhub import get_readhub_data
+from v2ex.v2ex import get_v2ex_data
+from hostloc.hostloc import get_hostloc_data
+from linuxdo.linuxdo import get_linuxdo_data
+from nodeseek.nodeseek import get_nodeseek_data
+from wsj.wsj import get_wsj_data
+from nytimes.nytimes import get_nytimes_data
+from bloomberg.bloomberg import get_bloomberg_data
+from ft.ft import get_ft_data
 from pymongo import MongoClient
 import time
 import httpx
@@ -56,6 +64,8 @@ db = client[MONGO_DB]
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
 }
+
+
 def fetch(url, header):
     retry = 5
     while retry > 0:
@@ -67,10 +77,11 @@ def fetch(url, header):
                 return data
             retry -= 1
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
-        except Exception as e:
+        except Exception as err:
             retry -= 1
-            print("now_time: {}, url: {}, error: {}".format(time.time(), url, str(e)))
+            print("now_time: {}, url: {}, error: {}".format(time.time(), url, str(err)))
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
+
 
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
@@ -88,6 +99,7 @@ def get_zhihu_hot_data():
     zhihu_hot_list.insert_one(data)
     print("zhihu data inserted")
 
+
 def get_douyin_hot_data():
     douyin_hot = db['douyin_hot']
     session = requests.Session()
@@ -99,6 +111,8 @@ def get_douyin_hot_data():
         data['insert_time'] = time.time()
         douyin_hot.insert_one(data)
         print("douyin data inserted")
+
+
 def get_bilibili_hot_data():
     bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking/v2"
     bilibili_hot = db['bilibili_hot']
@@ -135,6 +149,7 @@ def get_tieba_topic():
     tieba.insert_one(data)
     print("tieba topic data inserted")
 
+
 def get_juejin_hot():
     url = "https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot"
     juejin_hot = db['juejin_hot']
@@ -158,6 +173,7 @@ def get_ssp_hot():
     shaoshupai_hot.insert_one(data)
     print("shaoshupai data inserted")
 
+
 def insert_data(collection_name, data):
     """通用数据插入函数"""
     if not data:
@@ -169,9 +185,9 @@ def insert_data(collection_name, data):
     collection.insert_one(data)
     print(f"{collection_name} data inserted")
 
+
 if __name__ == "__main__":
     try:
-        # 现有的直接插入MongoDB的函数
         try:
             get_toutiao_hot()
         except Exception as e:
@@ -271,6 +287,13 @@ if __name__ == "__main__":
         safe_insert("wallstreetcn", get_wallstreetcn_data)
         safe_insert("readhub", get_readhub_data)
         safe_insert("needknow", get_ithome_needknow_data)
-
+        safe_insert("v2ex", get_v2ex_data)
+        safe_insert("hostloc", get_hostloc_data)
+        safe_insert("linuxdo", get_linuxdo_data)
+        safe_insert("nodeseek", get_nodeseek_data)
+        safe_insert("wsj", get_wsj_data)
+        safe_insert("nytimes", get_nytimes_data)
+        safe_insert("bloomberg", get_bloomberg_data)
+        safe_insert("ft", get_ft_data)
     finally:
         client.close()
