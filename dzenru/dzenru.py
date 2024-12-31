@@ -46,5 +46,3 @@ def get_dzenru_data():
                 })
             topList = data_list
     return {"data": data, "topList": topList}
-
-print(get_dzenru_data())
