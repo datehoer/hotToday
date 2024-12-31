@@ -14,7 +14,8 @@ def get_newsau_data():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
     res = requests.get(url, headers=headers)
-    doc = pyquery.PyQuery(res.content)
+    res.encoding = res.apparent_encoding
+    doc = pyquery.PyQuery(res.text)
     items = doc("h4.storyblock_title").items()
     data = []
     for item in items:
