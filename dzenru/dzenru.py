@@ -24,8 +24,8 @@ def get_dzenru_data():
         'sec-ch-ua-platform': '"Windows"',
     }
     session = requests.Session()
-    session.get(url, headers=headers, proxies={"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"})
-    res = session.get(url, headers=headers, proxies={"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"})
+    session.get(url, headers=headers)
+    res = session.get(url, headers=headers)
     res.encoding = res.apparent_encoding
     doc = pyquery.PyQuery(res.text)
     items = doc("script[nonce]").items()
