@@ -63,6 +63,7 @@ from foxnews.foxnews import get_foxnews_data
 from fivech.fivech import get_5ch_data
 from dailymail.dailymail import get_dailymail_data
 from asahi.asahi import get_asahi_data
+from dzenru.dzenru import get_dzenru_data
 
 
 from pymongo import MongoClient
@@ -317,5 +318,6 @@ if __name__ == "__main__":
         safe_insert("mumsnet", get_mumsnet_data)
         safe_insert("newsau", get_newsau_data)
         safe_insert("fivech", get_5ch_data)
+        safe_insert("dzenru", get_dzenru_data)
     finally:
         client.close()

@@ -85,3 +85,4 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - 5ch
 - dailymail
 - asahi
+- dzen
