@@ -310,7 +310,7 @@ if __name__ == "__main__":
         safe_insert("yna", get_yna_data)
         safe_insert("asahi", get_asahi_data)
         safe_insert("nhk", get_nhk_data)
-        safe_insert("foxnews", get_foxnews_data())
+        safe_insert("foxnews", get_foxnews_data)
         safe_insert("rt", get_rt_data)
         safe_insert("lemonde", get_lemonde_data)
         safe_insert("dailymail", get_dailymail_data)
