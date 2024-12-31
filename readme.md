@@ -75,3 +75,13 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - ft
 - nytimes
 - bloomberg
+- yna
+- tagesschau
+- rt
+- nhk
+- newsau
+- mumsnet
+- foxnews
+- 5ch
+- dailymail
+- asahi

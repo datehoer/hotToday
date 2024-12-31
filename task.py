@@ -53,6 +53,18 @@ from wsj.wsj import get_wsj_data
 from nytimes.nytimes import get_nytimes_data
 from bloomberg.bloomberg import get_bloomberg_data
 from ft.ft import get_ft_data
+from yna.yna import get_yna_data
+from tagesschau.tagesschau import get_lemonde_data
+from rt.rt import get_rt_data
+from nhk.nhk import get_nhk_data
+from newsau.newsau import get_newsau_data
+from mumsnet.mumsnet import get_mumsnet_data
+from foxnews.foxnews import get_foxnews_data
+from fivech.fivech import get_5ch_data
+from dailymail.dailymail import get_dailymail_data
+from asahi.asahi import get_asahi_data
+
+
 from pymongo import MongoClient
 import time
 import httpx
@@ -295,5 +307,15 @@ if __name__ == "__main__":
         safe_insert("nytimes", get_nytimes_data)
         safe_insert("bloomberg", get_bloomberg_data)
         safe_insert("ft", get_ft_data)
+        safe_insert("yna", get_yna_data)
+        safe_insert("asahi", get_asahi_data)
+        safe_insert("nhk", get_nhk_data)
+        safe_insert("foxnews", get_foxnews_data())
+        safe_insert("rt", get_rt_data)
+        safe_insert("lemonde", get_lemonde_data)
+        safe_insert("dailymail", get_dailymail_data)
+        safe_insert("mumsnet", get_mumsnet_data)
+        safe_insert("newsau", get_newsau_data)
+        safe_insert("fivech", get_5ch_data)
     finally:
         client.close()
