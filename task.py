@@ -64,8 +64,6 @@ from fivech.fivech import get_5ch_data
 from dailymail.dailymail import get_dailymail_data
 from asahi.asahi import get_asahi_data
 from dzenru.dzenru import get_dzenru_data
-
-
 from pymongo import MongoClient
 import time
 import httpx
@@ -250,8 +248,8 @@ if __name__ == "__main__":
         def safe_insert(collection_name, data_func):
             try:
                 insert_data(collection_name, data_func())
-            except Exception as e:
-                print(f"Error inserting {collection_name} data: {e}")
+            except Exception as err:
+                print(f"Error inserting {collection_name} data: {err}")
 
         # 通过 safe_insert 函数插入数据
         safe_insert("pengpai", get_pengpai_hot)
@@ -270,7 +268,7 @@ if __name__ == "__main__":
         safe_insert("douban_movie", get_douban_movie_data)
         safe_insert("freebuf", get_freebuf_data)
         safe_insert("github", get_github_data)
-        safe_insert("google_search", get_googlesearch_data)
+        # safe_insert("google_search", get_googlesearch_data)
         safe_insert("hupu", get_hupu_data)
         safe_insert("huxiu", get_huxiu_data)
         safe_insert("ithome", get_ithome_data)
