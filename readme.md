@@ -6,6 +6,8 @@
 - Github: https://github.com/datehoer/hot-rank-web
 
 爬虫项目 (Web Scraping Project)：主要利用requests进行请求，少数数据通过逆向参数获取。
+mongodb -> postgresql
+
 如果有什么问题/需求，欢迎提issue。
 (Using requests for data collection, with some data obtained through parameter reverse engineering.
 If you have any questions/requirements, please feel free to create an issue.)

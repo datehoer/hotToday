@@ -64,14 +64,20 @@ from fivech.fivech import get_5ch_data
 from dailymail.dailymail import get_dailymail_data
 from asahi.asahi import get_asahi_data
 from dzenru.dzenru import get_dzenru_data
-from pymongo import MongoClient
+import psycopg2
 import time
 import httpx
 from curl_cffi import requests
 import random
-from config import MONGO_URI, MONGO_DB
-client = MongoClient(MONGO_URI)
-db = client[MONGO_DB]
+import json
+from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD
+conn = psycopg2.connect(
+    host=PG_HOST,
+    port=PG_PORT,
+    user=PG_USER,
+    password=PG_PASSWORD,
+    database=PG_DB
+)
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
 }
@@ -84,7 +90,6 @@ def fetch(url, header):
             res = requests.get(url, headers=header)
             if res.status_code == 200:
                 data = res.json()
-                data['insert_time'] = time.time()
                 return data
             retry -= 1
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
@@ -96,37 +101,33 @@ def fetch(url, header):
 
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
-    article = db["weibo_hot_search"]
+    table_name = "weibo_hot_search"
     data = httpx.get(weibo_url).json()
     data['insert_time'] = time.time()
-    article.insert_one(data)
-    print("weibo Data inserted")
+    insert_data(table_name, data)
 
 
 def get_zhihu_hot_data():
-    zhihu_hot_list = db['zhihu_hot_list']
+    table_name = 'zhihu_hot_list'
     zhihu_hot_list_url = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=100"
     data = fetch(zhihu_hot_list_url, headers)
-    zhihu_hot_list.insert_one(data)
-    print("zhihu data inserted")
+    insert_data(table_name, data)
 
 
 def get_douyin_hot_data():
-    douyin_hot = db['douyin_hot']
+    table_name = 'douyin_hot'
     session = requests.Session()
     session.headers = headers
     session.get("https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383")
     res = session.get("https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50")
     if res.status_code == 200:
         data = res.json()
-        data['insert_time'] = time.time()
-        douyin_hot.insert_one(data)
-        print("douyin data inserted")
+        insert_data(table_name, data)
 
 
 def get_bilibili_hot_data():
     bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking/v2"
-    bilibili_hot = db['bilibili_hot']
+    table_name = 'bilibili_hot'
     err = 5
     while err > 0:
         bili_headers = {}
@@ -134,9 +135,7 @@ def get_bilibili_hot_data():
         data = res.json()
         data_code = data.get("code", 352)
         if data_code == 0:
-            data['insert_time'] = time.time()
-            bilibili_hot.insert_one(data)
-            print("bilibili_hot data get success")
+            insert_data(table_name, data)
             break
         else:
             print(data)
@@ -147,54 +146,51 @@ def get_bilibili_hot_data():
 
 def get_wx_read_rank():
     url = "https://weread.qq.com/web/bookListInCategory/rising?rank=1"
-    wx_read = db['wx_read_rank']
+    table_name = 'wx_read_rank'
     data = fetch(url, headers)
-    wx_read.insert_one(data)
-    print("wx_read_rank data inserted")
+    insert_data(table_name, data)
 
 
 def get_tieba_topic():
     url = "https://tieba.baidu.com/hottopic/browse/topicList"
-    tieba = db['tieba_topic']
+    table_name = 'tieba_topic'
     data = fetch(url, headers)
-    tieba.insert_one(data)
-    print("tieba topic data inserted")
+    insert_data(table_name, data)
 
 
 def get_juejin_hot():
     url = "https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot"
-    juejin_hot = db['juejin_hot']
+    table_name = 'juejin_hot'
     data = fetch(url, headers)
-    juejin_hot.insert_one(data)
-    print("juejin_hot data inserted")
+    insert_data(table_name, data)
 
 
 def get_toutiao_hot():
     url = "https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc"
-    toutiao_hot = db['toutiao_hot']
+    table_name = 'toutiao_hot'
     data = fetch(url, headers)
-    toutiao_hot.insert_one(data)
-    print("toutiao_hot data inserted")
+    insert_data(table_name, data)
 
 
 def get_ssp_hot():
     url = "https://sspai.com/api/v1/article/tag/page/get?limit=50&tag=%E7%83%AD%E9%97%A8%E6%96%87%E7%AB%A0"
-    shaoshupai_hot = db['shaoshupai_hot']
+    table_name = 'shaoshupai_hot'
     data = fetch(url, headers)
-    shaoshupai_hot.insert_one(data)
-    print("shaoshupai data inserted")
+    insert_data(table_name, data)
 
 
-def insert_data(collection_name, data):
+def insert_data(table_name, data):
     """通用数据插入函数"""
     if not data:
-        print(f"{collection_name} data fetch failed")
+        print(f"{table_name} data fetch failed")
         return
-    
-    collection = db[collection_name]
-    data['insert_time'] = time.time()
-    collection.insert_one(data)
-    print(f"{collection_name} data inserted")
+    cursor = conn.cursor()
+    cursor.execute(
+        f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
+        (json.dumps(data), int(time.time()))
+    )
+    print(f"{table_name} data inserted")
+    cursor.close()
 
 
 if __name__ == "__main__":
@@ -318,4 +314,5 @@ if __name__ == "__main__":
         safe_insert("fivech", get_5ch_data)
         safe_insert("dzenru", get_dzenru_data)
     finally:
-        client.close()
+        conn.commit()
+        conn.close()

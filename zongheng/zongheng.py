@@ -15,4 +15,4 @@ def get_zongheng_data():
 
     res = requests.post(url, data=payload)
     res_json = res.json()
-    return res_json
+    return {"data": res_json['result']}

@@ -1,4 +1,6 @@
 import requests
+
+
 def get_acfun_data():
     url = "https://www.acfun.cn/rest/pc-direct/rank/channel?channelId=&subChannelId=&rankLimit=30&rankPeriod=DAY"
     headers = {
@@ -6,4 +8,4 @@ def get_acfun_data():
     }
     res = requests.get(url, headers=headers)
     res_json = res.json()
-    return res_json
+    return {"data": res_json['rankList']}

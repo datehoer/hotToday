@@ -8,4 +8,4 @@ def get_tencent_data():
     res = requests.get(url, headers=headers)
 
     res_json = res.json()
-    return res_json
+    return {"data": res_json['idlist']}

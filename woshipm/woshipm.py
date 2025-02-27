@@ -4,4 +4,4 @@ def get_woshipm_data():
     url = "https://www.woshipm.com/api2/app/article/popular/daily"
     res = requests.get(url)
     res_json = res.json()
-    return res_json
+    return {"data": res_json['RESULT']}
