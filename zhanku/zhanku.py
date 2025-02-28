@@ -25,5 +25,5 @@ def get_zhanku_data():
     }
     res = requests.get(url, params=params, headers=headers)
     res_json = res.json()
-    return res_json
+    return {"data": res_json['datas']}
 
