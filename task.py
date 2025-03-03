@@ -185,6 +185,8 @@ def insert_data(table_name, data):
         print(f"{table_name} data fetch failed")
         return
     cursor = conn.cursor()
+    if "data" in data:
+        data = data["data"]
     cursor.execute(
         f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
         (json.dumps(data), int(time.time()))
