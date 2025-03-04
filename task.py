@@ -71,6 +71,17 @@ from curl_cffi import requests
 import random
 import json
 from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD
+import logging
+import os
+current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
+log_filename = f'hot_log_{current_time}.log'
+log_path = os.path.join('/opt/hotToday', log_filename)
+logging.basicConfig(
+    filename=log_path,
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s'
+)
+
 conn = psycopg2.connect(
     host=PG_HOST,
     port=PG_PORT,
@@ -87,7 +98,7 @@ def fetch(url, header):
     retry = 5
     while retry > 0:
         try:
-            res = requests.get(url, headers=header)
+            res = requests.get(url, headers=header, timeout=30)
             if res.status_code == 200:
                 data = res.json()
                 return data
@@ -95,14 +106,16 @@ def fetch(url, header):
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
         except Exception as err:
             retry -= 1
-            print("now_time: {}, url: {}, error: {}".format(time.time(), url, str(err)))
+            logging.error(f"now_time: {time.time()}, url: {url}, error: {err}")
+            if retry == 0:
+                return None
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
 
 
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
     table_name = "weibo_hot_search"
-    data = httpx.get(weibo_url).json()
+    data = httpx.get(weibo_url, timeout=30).json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
 
@@ -131,16 +144,15 @@ def get_bilibili_hot_data():
     err = 5
     while err > 0:
         bili_headers = {}
-        res = requests.get(bilibili_hot_url, headers=bili_headers)
+        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=30)
         data = res.json()
         data_code = data.get("code", 352)
         if data_code == 0:
             insert_data(table_name, data)
             break
         else:
-            print(data)
             err -= 1
-            print("bilibili_hot data get error")
+            logging.error("bilibili_hot data get error")
             time.sleep(3)
 
 
@@ -182,17 +194,23 @@ def get_ssp_hot():
 def insert_data(table_name, data):
     """通用数据插入函数"""
     if not data:
-        print(f"{table_name} data fetch failed")
+        logging.error(f"{table_name} data fetch failed")
         return
-    cursor = conn.cursor()
-    if "data" in data:
-        data = data["data"]
-    cursor.execute(
-        f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
-        (json.dumps(data), int(time.time()))
-    )
-    print(f"{table_name} data inserted")
-    cursor.close()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        if "data" in data:
+            data = data["data"]
+        cursor.execute(
+            f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
+            (json.dumps(data), int(time.time()))
+        )
+        logging.info(f"{table_name} data inserted")
+    except Exception as err:
+        logging.error(f"Error inserting into {table_name}: {err}")
+    finally:
+        if cursor:
+            cursor.close()
 
 
 if __name__ == "__main__":
@@ -200,54 +218,54 @@ if __name__ == "__main__":
         try:
             get_toutiao_hot()
         except Exception as e:
-            print(f"Error fetching toutiao_hot data: {e}")
+            logging.error(f"Error fetching toutiao_hot data: {e}")
 
         try:
             get_juejin_hot()
         except Exception as e:
-            print(f"Error fetching juejin_hot data: {e}")
+            logging.error(f"Error fetching juejin_hot data: {e}")
 
         try:
             get_tieba_topic()
         except Exception as e:
-            print(f"Error fetching tieba_topic data: {e}")
+            logging.error(f"Error fetching tieba_topic data: {e}")
 
         try:
             get_wx_read_rank()
         except Exception as e:
-            print(f"Error fetching wx_read_rank data: {e}")
+            logging.error(f"Error fetching wx_read_rank data: {e}")
 
         try:
             get_zhihu_hot_data()
         except Exception as e:
-            print(f"Error fetching zhihu_hot data: {e}")
+            logging.error(f"Error fetching zhihu_hot data: {e}")
 
         try:
             get_weibo_data()
         except Exception as e:
-            print(f"Error fetching weibo data: {e}")
+            logging.error(f"Error fetching weibo data: {e}")
 
         try:
             get_ssp_hot()
         except Exception as e:
-            print(f"Error fetching shaoshupai_hot data: {e}")
+            logging.error(f"Error fetching shaoshupai_hot data: {e}")
 
         try:
             get_douyin_hot_data()
         except Exception as e:
-            print(f"Error fetching douyin_hot data: {e}")
+            logging.error(f"Error fetching douyin_hot data: {e}")
 
         try:
             get_bilibili_hot_data()
         except Exception as e:
-            print(f"Error fetching bilibili_hot data: {e}")
+            logging.error(f"Error fetching bilibili_hot data: {e}")
 
         # 新的数据插入方式，增加每个插入的try-except
         def safe_insert(collection_name, data_func):
             try:
                 insert_data(collection_name, data_func())
             except Exception as err:
-                print(f"Error inserting {collection_name} data: {err}")
+                logging.error(f"Error inserting {collection_name} data: {err}")
 
         # 通过 safe_insert 函数插入数据
         safe_insert("pengpai", get_pengpai_hot)
@@ -315,6 +333,9 @@ if __name__ == "__main__":
         safe_insert("newsau", get_newsau_data)
         safe_insert("fivech", get_5ch_data)
         safe_insert("dzenru", get_dzenru_data)
+    except Exception as error:
+        logging.error(f"some error happen: {error}")
     finally:
         conn.commit()
         conn.close()
+        logging.info("All data inserted")
