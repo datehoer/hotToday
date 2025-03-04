@@ -75,7 +75,8 @@ import logging
 import os
 current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
 log_filename = f'hot_log_{current_time}.log'
-log_path = os.path.join('/opt/hotToday', log_filename)
+os.makedirs('/opt/hotToday/logs', exist_ok=True)
+log_path = os.path.join('/opt/hotToday/logs', log_filename)
 logging.basicConfig(
     filename=log_path,
     level=logging.INFO,
