@@ -99,7 +99,7 @@ def fetch(url, header):
     retry = 5
     while retry > 0:
         try:
-            res = requests.get(url, headers=header, timeout=30)
+            res = requests.get(url, headers=header, timeout=30, impersonate="chrome")
             if res.status_code == 200:
                 data = res.json()
                 return data
@@ -116,7 +116,7 @@ def fetch(url, header):
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
     table_name = "weibo_hot_search"
-    data = httpx.get(weibo_url, timeout=30, impersonate="chrome").json()
+    data = httpx.get(weibo_url, timeout=30).json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
 
@@ -124,7 +124,7 @@ def get_weibo_data():
 def get_zhihu_hot_data():
     table_name = 'zhihu_hot_list'
     zhihu_hot_list_url = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=50&desktop=true"
-    data = fetch(zhihu_hot_list_url, headers, impersonate="chrome")
+    data = fetch(zhihu_hot_list_url, headers)
     insert_data(table_name, data)
 
 
@@ -160,35 +160,35 @@ def get_bilibili_hot_data():
 def get_wx_read_rank():
     url = "https://weread.qq.com/web/bookListInCategory/rising?rank=1"
     table_name = 'wx_read_rank'
-    data = fetch(url, headers, impersonate="chrome")
+    data = fetch(url, headers)
     insert_data(table_name, data)
 
 
 def get_tieba_topic():
     url = "https://tieba.baidu.com/hottopic/browse/topicList"
     table_name = 'tieba_topic'
-    data = fetch(url, headers, impersonate="chrome")
+    data = fetch(url, headers)
     insert_data(table_name, data)
 
 
 def get_juejin_hot():
     url = "https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot"
     table_name = 'juejin_hot'
-    data = fetch(url, headers, impersonate="chrome")
+    data = fetch(url, headers)
     insert_data(table_name, data)
 
 
 def get_toutiao_hot():
     url = "https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc"
     table_name = 'toutiao_hot'
-    data = fetch(url, headers, impersonate="chrome")
+    data = fetch(url, headers)
     insert_data(table_name, data)
 
 
 def get_ssp_hot():
     url = "https://sspai.com/api/v1/article/tag/page/get?limit=50&tag=%E7%83%AD%E9%97%A8%E6%96%87%E7%AB%A0"
     table_name = 'shaoshupai_hot'
-    data = fetch(url, headers, impersonate="chrome")
+    data = fetch(url, headers)
     insert_data(table_name, data)
 
 
