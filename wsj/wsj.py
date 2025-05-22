@@ -28,14 +28,14 @@ def get_wsj_data():
     session.get(url, headers=headers, impersonate="chrome99")
     res = session.get(url, headers=headers, impersonate="chrome99")
     doc = pyquery.PyQuery(res.text)
-    items = doc("div>article h2").items()
+    items = doc("h1~div h3>a").items()
     data = []
 
     for item in items:
-        title = item.find("a span").text()
+        title = item.find("div").text()
         if title == "":
             continue
-        link = urljoin(url, item.find("a").attr("href"))
+        link = urljoin(url, item.attr("href"))
         hotScore = 0
         data.append({
             "title": title,

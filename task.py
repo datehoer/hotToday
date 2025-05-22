@@ -25,7 +25,7 @@ from qichezhijia.qichezhijia import get_qichezhijia_data
 from qidian.qidian import get_rank_list
 from shuimu.shuimu import get_shuimu_data
 from sina.sina import get_sina_data
-from sina.sina_sport import get_sina_sport_data
+# from sina.sina_sport import get_sina_sport_data
 from sina.sina_news import get_sina_news
 from taipingyang.taipingyang import get_taipingyang_data
 from taptap.taptap import get_taptap_data
@@ -50,7 +50,7 @@ from hostloc.hostloc import get_hostloc_data
 from linuxdo.linuxdo import get_linuxdo_data
 from nodeseek.nodeseek import get_nodeseek_data
 from wsj.wsj import get_wsj_data
-from nytimes.nytimes import get_nytimes_data
+# from nytimes.nytimes import get_nytimes_data
 from bloomberg.bloomberg import get_bloomberg_data
 from ft.ft import get_ft_data
 from yna.yna import get_yna_data
@@ -116,15 +116,15 @@ def fetch(url, header):
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
     table_name = "weibo_hot_search"
-    data = httpx.get(weibo_url, timeout=30).json()
+    data = httpx.get(weibo_url, timeout=30, impersonate="chrome").json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
 
 
 def get_zhihu_hot_data():
     table_name = 'zhihu_hot_list'
-    zhihu_hot_list_url = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=100"
-    data = fetch(zhihu_hot_list_url, headers)
+    zhihu_hot_list_url = "https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=50&desktop=true"
+    data = fetch(zhihu_hot_list_url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
@@ -132,8 +132,8 @@ def get_douyin_hot_data():
     table_name = 'douyin_hot'
     session = requests.Session()
     session.headers = headers
-    session.get("https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383")
-    res = session.get("https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50")
+    session.get("https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383", impersonate="chrome")
+    res = session.get("https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50", impersonate="chrome")
     if res.status_code == 200:
         data = res.json()
         insert_data(table_name, data)
@@ -145,7 +145,7 @@ def get_bilibili_hot_data():
     err = 5
     while err > 0:
         bili_headers = {}
-        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=30)
+        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=30, impersonate="chrome")
         data = res.json()
         data_code = data.get("code", 352)
         if data_code == 0:
@@ -160,35 +160,35 @@ def get_bilibili_hot_data():
 def get_wx_read_rank():
     url = "https://weread.qq.com/web/bookListInCategory/rising?rank=1"
     table_name = 'wx_read_rank'
-    data = fetch(url, headers)
+    data = fetch(url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
 def get_tieba_topic():
     url = "https://tieba.baidu.com/hottopic/browse/topicList"
     table_name = 'tieba_topic'
-    data = fetch(url, headers)
+    data = fetch(url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
 def get_juejin_hot():
     url = "https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot"
     table_name = 'juejin_hot'
-    data = fetch(url, headers)
+    data = fetch(url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
 def get_toutiao_hot():
     url = "https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc"
     table_name = 'toutiao_hot'
-    data = fetch(url, headers)
+    data = fetch(url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
 def get_ssp_hot():
     url = "https://sspai.com/api/v1/article/tag/page/get?limit=50&tag=%E7%83%AD%E9%97%A8%E6%96%87%E7%AB%A0"
     table_name = 'shaoshupai_hot'
-    data = fetch(url, headers)
+    data = fetch(url, headers, impersonate="chrome")
     insert_data(table_name, data)
 
 
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         safe_insert("qidian", get_rank_list)
         safe_insert("shuimu", get_shuimu_data)
         safe_insert("sina", get_sina_data)
-        safe_insert("sina_sport", get_sina_sport_data)
+        # safe_insert("sina_sport", get_sina_sport_data)
         safe_insert("sina_news", get_sina_news)
         safe_insert("taipingyang", get_taipingyang_data)
         safe_insert("taptap", get_taptap_data)
@@ -320,7 +320,7 @@ if __name__ == "__main__":
         safe_insert("linuxdo", get_linuxdo_data)
         safe_insert("nodeseek", get_nodeseek_data)
         safe_insert("wsj", get_wsj_data)
-        safe_insert("nytimes", get_nytimes_data)
+        # safe_insert("nytimes", get_nytimes_data)
         safe_insert("bloomberg", get_bloomberg_data)
         safe_insert("ft", get_ft_data)
         safe_insert("yna", get_yna_data)
