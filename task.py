@@ -236,10 +236,10 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"Error fetching wx_read_rank data: {e}")
 
-        try:
-            get_zhihu_hot_data()
-        except Exception as e:
-            logging.error(f"Error fetching zhihu_hot data: {e}")
+        # try:
+        #     get_zhihu_hot_data()
+        # except Exception as e:
+        #     logging.error(f"Error fetching zhihu_hot data: {e}")
 
         try:
             get_weibo_data()
