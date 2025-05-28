@@ -12,8 +12,9 @@ from diyicaijing.diyicaijing import get_diyicaijing_data
 from dongchedi.dongchedi import get_dongchedi_hot_search
 from douban.douban import get_douban_movie_data
 from freebuf.freebuf import get_freebuf_data
-from github.github import get_github_data
-from googlesearch.googlesearch import get_googlesearch_data
+from githubspider.github import get_github_data
+# from googlesearch.googlesearch import get_googlesearch_data
+from mcpspider.mcpmarket import get_mcpmarket_data
 from hupu.hupu import get_hupu_data
 from huxiu.huxiu import get_huxiu_data
 from ithome.ithome import get_ithome_data
@@ -334,6 +335,7 @@ if __name__ == "__main__":
         safe_insert("newsau", get_newsau_data)
         safe_insert("fivech", get_5ch_data)
         safe_insert("dzenru", get_dzenru_data)
+        safe_insert("mcpmarket", get_mcpmarket_data)
     except Exception as error:
         logging.error(f"some error happen: {error}")
     finally:
