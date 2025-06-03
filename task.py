@@ -74,15 +74,46 @@ import json
 from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD
 import logging
 import os
+import glob
+
+def manage_log_files(log_dir, max_logs=10):
+    """管理日志文件数量，保留最新的max_logs个文件"""
+    try:
+        # 获取所有日志文件
+        log_pattern = os.path.join(log_dir, 'hot_log_*.log')
+        log_files = glob.glob(log_pattern)
+        
+        if len(log_files) > max_logs:
+            # 按修改时间排序，最新的在前
+            log_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            
+            # 删除超出数量的旧文件
+            files_to_delete = log_files[max_logs:]
+            for file_path in files_to_delete:
+                try:
+                    os.remove(file_path)
+                    print(f"删除旧日志文件: {file_path}")
+                except Exception as e:
+                    print(f"删除日志文件失败 {file_path}: {e}")
+                    
+    except Exception as e:
+        print(f"管理日志文件时出错: {e}")
+
 current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
 log_filename = f'hot_log_{current_time}.log'
-os.makedirs('/opt/hotToday/logs', exist_ok=True)
-log_path = os.path.join('/opt/hotToday/logs', log_filename)
+log_dir = '/opt/hotToday/logs'
+os.makedirs(log_dir, exist_ok=True)
+log_path = os.path.join(log_dir, log_filename)
+
+# 配置日志
 logging.basicConfig(
     filename=log_path,
     level=logging.INFO,
     format='%(asctime)s %(levelname)s: %(message)s'
 )
+
+# 管理日志文件数量
+manage_log_files(log_dir, max_logs=10)
 
 conn = psycopg2.connect(
     host=PG_HOST,
