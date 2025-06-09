@@ -319,7 +319,7 @@ if __name__ == "__main__":
         safe_insert("github", get_github_data)
         # safe_insert("google_search", get_googlesearch_data)
         safe_insert("hupu", get_hupu_data)
-        safe_insert("huxiu", get_huxiu_data)
+        # safe_insert("huxiu", get_huxiu_data)
         safe_insert("ithome", get_ithome_data)
         safe_insert("openeye", get_openeye_data)
         safe_insert("kanxue", get_kanxue_data)
