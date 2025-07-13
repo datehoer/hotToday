@@ -91,3 +91,10 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - dailymail
 - asahi
 - dzen
+
+todo:
+- https://lobste.rs/
+- https://arstechnica.com/
+- https://www.macrumors.com/
+- https://thenextweb.com/
+- https://www.theguardian.com/
