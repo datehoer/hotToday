@@ -6,21 +6,13 @@ def get_taipingyang_data():
     res = requests.get(url)
     doc = pyquery.PyQuery(res.content)
     article_data = []
-    # post_data = []
-    article_items = doc('.ranking-w1>ul>li').items()
-    # post_items = doc('.ranking-w2>ul>li').items()
+    article_items = doc('.hot-news>a').items()
     for item in article_items:
         article_data.append({
-            'title': item.find('a').text(),
-            'url': urljoin(url, item.find('a').attr('href')),
-            'hotScore': 0,
+            'title': item.find('div').text(),
+            'url': urljoin(url, item.attr('href')),
+            'hotScore': item.find('span.hot-num').text(),
         })
-    # for item in post_items:
-    #     post_data.append({
-    #         'title': item.find('.title>a').text(),
-    #         'url': urljoin(url, item.find('.titlea').attr('href')),
-    #         'hotScore': 0,
-    #     })
+
 
     return {"data":article_data}
-# print(post_data)

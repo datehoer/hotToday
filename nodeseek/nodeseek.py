@@ -6,7 +6,7 @@ def get_nodeseek_data():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     }
-    res = requests.get(url, headers=headers, impersonate="chrome")
+    res = requests.get(url, headers=headers, impersonate="chrome99")
     doc = pyquery.PyQuery(res.text)
     items = doc(".post-list>.post-list-item").items()
     data = []

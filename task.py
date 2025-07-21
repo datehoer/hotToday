@@ -351,7 +351,7 @@ if __name__ == "__main__":
         safe_insert("hostloc", get_hostloc_data)
         safe_insert("linuxdo", get_linuxdo_data)
         safe_insert("nodeseek", get_nodeseek_data)
-        safe_insert("wsj", get_wsj_data)
+        # safe_insert("wsj", get_wsj_data)
         # safe_insert("nytimes", get_nytimes_data)
         safe_insert("bloomberg", get_bloomberg_data)
         safe_insert("ft", get_ft_data)
