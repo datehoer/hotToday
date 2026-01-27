@@ -3,7 +3,7 @@ import pyquery
 from urllib.parse import urljoin
 def get_dianshangbao_data():
     url = "https://www.dsb.cn/news"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.text)
     items = doc("ol>li").items()
     data = []

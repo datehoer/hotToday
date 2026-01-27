@@ -13,6 +13,6 @@ def get_zongheng_data():
         'rankType': '3',
     }
 
-    res = requests.post(url, data=payload)
+    res = requests.post(url, data=payload, timeout=30)
     res_json = res.json()
     return {"data": res_json['result']}

@@ -4,7 +4,7 @@ import pyquery
 def get_ithome_data():
     url = "https://m.ithome.com/rankm/"
 
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
 
     doc = pyquery.PyQuery(res.content)
     data = []

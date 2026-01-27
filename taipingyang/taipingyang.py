@@ -3,7 +3,7 @@ import pyquery
 from urllib.parse import urljoin
 def get_taipingyang_data():
     url = "https://www.pcauto.com.cn/"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.content)
     article_data = []
     article_items = doc('.hot-news>a').items()

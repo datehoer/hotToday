@@ -46,7 +46,7 @@ def get_sina_news():
     seen_urls = set()  # Track seen URLs
 
     for param in params:
-        res = requests.get(url, params=param, headers=headers)
+        res = requests.get(url, params=param, headers=headers, timeout=30)
         all_1_data = re.findall(r".*1_data = (.*?);", res.text)[0]
         all_1_data = json.loads(all_1_data)
         if "data" in all_1_data:

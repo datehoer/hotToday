@@ -22,7 +22,7 @@ def get_huxiu_data():
         "Referer": "https://www.huxiu.com/article/",
         "Referrer-Policy": "strict-origin-when-cross-origin"
     }
-    res = httpx.get(url, headers=headers, verify=False)
+    res = httpx.get(url, headers=headers, timeout=30, verify=False)
     doc = pyquery.PyQuery(res.content)
     data = []
     hot_tabs = doc(".hot-article-wrap>.article-wrap>div").items()

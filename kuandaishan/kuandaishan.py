@@ -3,7 +3,7 @@ import pyquery
 
 def get_kuandaishan_data():
     url = "https://club.kdslife.com/index.php?c=right/right&m=right_hot"
-    res = requests.post(url, json={"c": "right/right", "m": "right_hot"})
+    res = requests.post(url, json={"c": "right/right", "m": "right_hot"}, timeout=30)
     res_json = res.json()
     data = []
     day = res_json['day']

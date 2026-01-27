@@ -12,12 +12,12 @@ def get_openeye_data():
     }
     session = requests.session()
 
-    session.get("https://m.eyepetizer.net/")
-    session.post("https://proxy.eyepetizer.net/v1/card/page/get_nav", headers=headers, json={
+    session.get("https://m.eyepetizer.net/", timeout=30)
+    session.post("https://proxy.eyepetizer.net/v1/card/page/get_nav", headers=headers, timeout=30, json={
         "tab_label": "mainpage",
         "version": "3.0.14"
     })
-    res = session.post("https://proxy.eyepetizer.net/v1/card/page/get_page", headers=headers, json={
+    res = session.post("https://proxy.eyepetizer.net/v1/card/page/get_page", headers=headers, timeout=30, json={
         "page_label": "recommend",
         "page_type": "card"
     })

@@ -102,7 +102,7 @@ def get_yiche_data():
         "Referer": "https://www.yiche.com/",
         "Referrer-Policy": "no-referrer-when-downgrade"
     }
-    article_res = requests.get(article_url, params=article_params, headers=article_headers)
+    article_res = requests.get(article_url, params=article_params, headers=article_headers, timeout=30)
     article_res_json = article_res.json()
     return article_res_json
 # video_res = requests.get(video_url, params=video_params, headers=video_headers)

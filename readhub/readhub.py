@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 def get_readhub_data():
     url = "https://readhub.cn/hot"
 
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
 
     doc = pyquery.PyQuery(res.content.decode("utf-8"))
     data = []

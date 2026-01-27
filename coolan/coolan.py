@@ -45,5 +45,5 @@ def get_cool():
     app_token = get_v2_token(app_device)
     headers['X-App-Token'] = app_token
     headers['X-App-Device'] = app_device
-    res = requests.get(url, headers=headers, impersonate="chrome99_android")
+    res = requests.get(url, headers=headers, timeout=30, impersonate="chrome99_android")
     return res.json()

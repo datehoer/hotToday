@@ -24,7 +24,7 @@ def get_nytimes_data():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
     session = requests.Session()
-    res = session.get(url, headers=headers, impersonate="chrome99")
+    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99")
     data = []
     doc = pyquery.PyQuery(res.text)
     items = doc("#stream-panel div>ol>li").items()

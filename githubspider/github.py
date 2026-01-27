@@ -18,7 +18,7 @@ def get_github_data():
         "sec-fetch-user": "?1",
         "upgrade-insecure-requests": "1",
     }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=30)
     doc = pyquery.PyQuery(response.text)
     data = []
 

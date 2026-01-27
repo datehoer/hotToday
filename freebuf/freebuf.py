@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 def get_freebuf_data():
     url = "https://www.freebuf.com/news"
 
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.text)
     items = doc("div>.header-title~div").items()
     data = []

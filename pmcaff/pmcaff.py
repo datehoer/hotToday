@@ -9,6 +9,6 @@ def get_pmcaff_data():
         'times': 0,
     }
 
-    res = requests.post(url, data=payload)
+    res = requests.post(url, data=payload, timeout=30)
     res_json = res.json()
     return res_json

@@ -6,7 +6,7 @@ import re
 import json
 def get_baidu_data():
     url = "https://top.baidu.com/board?tab=realtime"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(response.content)
 
     search_tabs_data = doc("#sanRoot").html()

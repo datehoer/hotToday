@@ -3,7 +3,7 @@ from urllib.parse import urljoin
 def get_diyicaijing_data():
     url = "https://www.yicai.com/api/ajax/getranklistbykeys?keys=newsRank%2CvideoRank%2CimageRank%2CliveRank"
 
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
 
     res_json = res.json()
 

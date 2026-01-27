@@ -21,7 +21,7 @@ def get_ithome_needknow_data():
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
 
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers, timeout=30)
     res.encoding = res.apparent_encoding
     doc = pyquery.PyQuery(res.text)
     data = []

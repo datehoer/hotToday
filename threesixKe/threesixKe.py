@@ -26,7 +26,7 @@ def get_36kr_data():
     data = []
     for url in urls:
         link = url + now + "/1"
-        res = requests.get(link)
+        res = requests.get(link, timeout=30)
         soup = pyquery.PyQuery(res.content)
         data.extend(analysis_detail(soup))
     numbers = soup(".pagination-wrapper>a").items()
@@ -35,7 +35,7 @@ def get_36kr_data():
         if page == "1":
             continue
         link = url + now + "/" + num.text()
-        res = requests.get(link)
+        res = requests.get(link, timeout=30)
         soup = pyquery.PyQuery(res.content)
         data.extend(analysis_detail(soup))
     return {"data":data}

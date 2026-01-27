@@ -72,9 +72,13 @@ from curl_cffi import requests
 import random
 import json
 from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD
-import logging
 import os
 import glob
+import sys
+from loguru import logger
+
+HTTP_TIMEOUT = float(os.getenv("HOT_HTTP_TIMEOUT", "30"))
+PG_CONNECT_TIMEOUT = int(os.getenv("HOT_PG_CONNECT_TIMEOUT", "10"))
 
 def manage_log_files(log_dir, max_logs=10):
     """管理日志文件数量，保留最新的max_logs个文件"""
@@ -92,35 +96,48 @@ def manage_log_files(log_dir, max_logs=10):
             for file_path in files_to_delete:
                 try:
                     os.remove(file_path)
-                    print(f"删除旧日志文件: {file_path}")
+                    logger.info(f"删除旧日志文件: {file_path}")
                 except Exception as e:
-                    print(f"删除日志文件失败 {file_path}: {e}")
+                    logger.warning(f"删除日志文件失败 {file_path}: {e}")
                     
     except Exception as e:
-        print(f"管理日志文件时出错: {e}")
+        logger.warning(f"管理日志文件时出错: {e}")
 
 current_time = time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
 log_filename = f'hot_log_{current_time}.log'
-log_dir = '/opt/hotToday/logs'
-os.makedirs(log_dir, exist_ok=True)
+log_dir = os.getenv("HOT_LOG_DIR", "/opt/hotToday/logs")
+try:
+    os.makedirs(log_dir, exist_ok=True)
+except Exception:
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
 log_path = os.path.join(log_dir, log_filename)
 
-# 配置日志
-logging.basicConfig(
-    filename=log_path,
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s'
+logger.remove()
+logger.add(sys.stderr, level=os.getenv("HOT_LOG_LEVEL", "INFO"))
+logger.add(
+    log_path,
+    level=os.getenv("HOT_LOG_LEVEL", "INFO"),
+    format="{time:YYYY-MM-DD HH:mm:ss} {level} {message}",
+    encoding="utf-8",
+    enqueue=True,
 )
 
 # 管理日志文件数量
 manage_log_files(log_dir, max_logs=10)
 
+logger.info(f"日志路径: {log_path}")
+logger.info(f"HTTP timeout: {HTTP_TIMEOUT}s, PG connect timeout: {PG_CONNECT_TIMEOUT}s")
+
+logger.info("Connecting to PostgreSQL...")
 conn = psycopg2.connect(
     host=PG_HOST,
     port=PG_PORT,
     user=PG_USER,
     password=PG_PASSWORD,
-    database=PG_DB
+    database=PG_DB,
+    connect_timeout=PG_CONNECT_TIMEOUT,
 )
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
@@ -131,15 +148,16 @@ def fetch(url, header):
     retry = 5
     while retry > 0:
         try:
-            res = requests.get(url, headers=header, timeout=30, impersonate="chrome")
+            res = requests.get(url, headers=header, timeout=HTTP_TIMEOUT, impersonate="chrome")
             if res.status_code == 200:
                 data = res.json()
                 return data
             retry -= 1
+            logger.warning(f"Fetch failed (status={res.status_code}) url={url} retries_left={retry}")
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
         except Exception as err:
             retry -= 1
-            logging.error(f"now_time: {time.time()}, url: {url}, error: {err}")
+            logger.exception(f"Fetch exception url={url} retries_left={retry}: {err}")
             if retry == 0:
                 return None
             time.sleep(random.choice([1, 2, 3, 4, 5])*retry)
@@ -148,7 +166,7 @@ def fetch(url, header):
 def get_weibo_data():
     weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
     table_name = "weibo_hot_search"
-    data = httpx.get(weibo_url, timeout=30).json()
+    data = httpx.get(weibo_url, timeout=HTTP_TIMEOUT).json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
 
@@ -164,11 +182,21 @@ def get_douyin_hot_data():
     table_name = 'douyin_hot'
     session = requests.Session()
     session.headers = headers
-    session.get("https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383", impersonate="chrome")
-    res = session.get("https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50", impersonate="chrome")
+    session.get(
+        "https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383",
+        timeout=HTTP_TIMEOUT,
+        impersonate="chrome",
+    )
+    res = session.get(
+        "https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50",
+        timeout=HTTP_TIMEOUT,
+        impersonate="chrome",
+    )
     if res.status_code == 200:
         data = res.json()
         insert_data(table_name, data)
+    else:
+        logger.warning(f"douyin hot search status={res.status_code}")
 
 
 def get_bilibili_hot_data():
@@ -177,7 +205,7 @@ def get_bilibili_hot_data():
     err = 5
     while err > 0:
         bili_headers = {}
-        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=30, impersonate="chrome")
+        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome")
         data = res.json()
         data_code = data.get("code", 352)
         if data_code == 0:
@@ -185,7 +213,7 @@ def get_bilibili_hot_data():
             break
         else:
             err -= 1
-            logging.error("bilibili_hot data get error")
+            logger.warning("bilibili_hot data get error")
             time.sleep(3)
 
 
@@ -227,20 +255,22 @@ def get_ssp_hot():
 def insert_data(table_name, data):
     """通用数据插入函数"""
     if not data:
-        logging.error(f"{table_name} data fetch failed")
+        logger.error(f"{table_name} data fetch failed")
         return
     cursor = None
     try:
+        start = time.monotonic()
         cursor = conn.cursor()
         if "data" in data:
             data = data["data"]
+        logger.info(f'Inserting "{table_name}"...')
         cursor.execute(
             f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
             (json.dumps(data), int(time.time()))
         )
-        logging.info(f"{table_name} data inserted")
+        logger.info(f'"{table_name}" inserted in {time.monotonic() - start:.2f}s')
     except Exception as err:
-        logging.error(f"Error inserting into {table_name}: {err}")
+        logger.exception(f"Error inserting into {table_name}: {err}")
     finally:
         if cursor:
             cursor.close()
@@ -248,15 +278,30 @@ def insert_data(table_name, data):
 
 if __name__ == "__main__":
     try:
+        run_start = time.monotonic()
+        logger.info("sometask.py start")
         def safe_insert(collection_name, data_func):
+            start = time.monotonic()
+            logger.info(f"[{collection_name}] fetch start")
             try:
-                insert_data(collection_name, data_func())
+                data = data_func()
             except Exception as err:
-                logging.error(f"Error inserting {collection_name} data: {err}")
+                logger.exception(f"[{collection_name}] fetch error: {err}")
+                return
+            logger.info(f"[{collection_name}] fetch ok ({time.monotonic() - start:.2f}s)")
+            try:
+                insert_data(collection_name, data)
+            except Exception as err:
+                logger.exception(f"[{collection_name}] insert error: {err}")
         safe_insert("huxiu", get_huxiu_data)
     except Exception as error:
-        logging.error(f"some error happen: {error}")
+        logger.exception(f"some error happen: {error}")
     finally:
-        conn.commit()
-        conn.close()
-        logging.info("All data inserted")
+        try:
+            logger.info("Committing transaction...")
+            commit_start = time.monotonic()
+            conn.commit()
+            logger.info(f"Commit done in {time.monotonic() - commit_start:.2f}s")
+        finally:
+            conn.close()
+        logger.info(f"sometask.py done in {time.monotonic() - run_start:.2f}s")

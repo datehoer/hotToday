@@ -6,6 +6,6 @@ def get_anquanke_data():
         "page": 1,
         "_": int(time.time()*1000)
     }
-    res = requests.get(url, params=params)
+    res = requests.get(url, params=params, timeout=30)
     res_json = res.json()
     return res_json

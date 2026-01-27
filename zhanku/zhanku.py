@@ -23,7 +23,6 @@ def get_zhanku_data():
         "Referer": "https://www.zcool.com.cn",
         "Referrer-Policy": "no-referrer-when-downgrade"
     }
-    res = requests.get(url, params=params, headers=headers)
+    res = requests.get(url, params=params, headers=headers, timeout=30)
     res_json = res.json()
     return {"data": res_json['datas']}
-

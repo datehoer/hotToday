@@ -3,7 +3,7 @@ import pyquery
 from urllib.parse import urljoin
 def get_kanxue_data():
     url = "https://bbs.kanxue.com/"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.content)
     items = doc(".bbs_home_page_three_col>div").eq(-1).find(".bbs_home_page_list_title").items()
     data = []

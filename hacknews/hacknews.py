@@ -2,7 +2,7 @@ import requests
 import pyquery
 def get_hacker_news():
     url = "https://news.ycombinator.com"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.text)
     detail_list = doc(".athing").items()
     data = []

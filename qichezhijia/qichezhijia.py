@@ -4,7 +4,7 @@ import pyquery
 
 def get_qichezhijia_data():
     url = "https://club.autohome.com.cn/"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.content)
     data = []
     items = doc(".rank-list").eq(-1).find("li").items()

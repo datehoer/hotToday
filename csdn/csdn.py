@@ -15,6 +15,6 @@ def get_csdn_data():
         "Referer": "https://blog.csdn.net/rank/list",
         "Referrer-Policy": "unsafe-url"
     }
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers, timeout=30)
     res_json = res.json()
     return res_json

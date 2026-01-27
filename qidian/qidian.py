@@ -20,7 +20,7 @@ def get_rank_list():
         'Accept-Language': 'zh-CN,zh;q=0.9',
         "Cookie": "w_tsfp=ltvgWVEE2utBvS0Q6aLhkkynFT07Z2R7xFw0D+M9Os09AaIpVZ2F1IN9udfldCyCt5Mxutrd9MVxYnGAV94ifhEdRsWTb5tH1VPHx8NlntdKRQJtA83YW1YXKrIh7TVFKT8LcBGy2D15IoFByeNmiA0EsSEg37ZlCa8hbMFbixsAqOPFm/97DxvSliPXAHGHM3wLc+6C6rgv8LlSgS3A9wqpcgQ2Xusewk+A1SgfDngj4RG7dOldNRytI86vWO0wrTPzwjn3apCs2RYx/UJk6EtuWZaxhCfAPX4VKFhsbVzg1Lkkfqf4PuFx6jcbVKQcGg8SoF4Yt+s66wk="
     }
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers, timeout=30)
     doc = pq(res.content)
     rank_list = doc("#book-img-text ul>li").items()
     data = []

@@ -19,7 +19,7 @@ def get_history_today():
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     }
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=30)
     doc = pyquery.PyQuery(response.content)
     things = doc(".tih-list>dl>dt").items()
     data = []

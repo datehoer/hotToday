@@ -8,7 +8,7 @@ def get_nhk_data():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     }
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers=headers, timeout=30)
     doc = pyquery.PyQuery(res.content)
     items = doc(".content--list.grid--col-single>li").items()
     data = []
@@ -25,4 +25,3 @@ def get_nhk_data():
             "hotScore": hotScore
         })
     return {"data": data}
-

@@ -2,7 +2,7 @@ import requests
 import pyquery
 def get_crypto_price():
     url = "https://crypto.com/price"
-    response = requests.get(url)
+    response = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(response.text)
     prices = doc("div>table>tbody>tr").items()
     result = []

@@ -10,7 +10,7 @@ def get_data(href, rank_type):
         "app_name": "auto_web_pc",
         "rank_type": rank_type
     }
-    res = requests.get(url, params=params)
+    res = requests.get(url, params=params, timeout=30)
     res_json = res.json()
     results = []
     if res_json['status'] == 0:
@@ -25,7 +25,7 @@ def get_data(href, rank_type):
 
 def get_dongchedi_hot_search():
     hot_search_url = "https://www.dongchedi.com/news/dynamic_motor_car"
-    res = requests.get(hot_search_url)
+    res = requests.get(hot_search_url, timeout=30)
     doc = pyquery.PyQuery(res.content)
     data = []
     items = doc("ol>li").items()

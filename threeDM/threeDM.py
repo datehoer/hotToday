@@ -2,7 +2,7 @@ import requests
 import pyquery
 def get_3dm_data():
     url = "https://www.3dmgame.com/phb.html"
-    res = requests.get(url)
+    res = requests.get(url, timeout=30)
     doc = pyquery.PyQuery(res.content)
     items = doc(".Phbright>.phlist").items()
     data = []
