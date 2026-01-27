@@ -163,8 +163,9 @@ def get_zhihu_hot_data():
 def get_douyin_hot_data():
     table_name = 'douyin_hot'
     session = requests.Session()
-    session.headers = headers
-    session.get("https://www.douyin.com/passport/general/login_guiding_strategy/?aid=6383", impersonate="chrome")
+    session.headers = headers.copy()
+    session.headers['referer'] = "https://www.douyin.com"
+    session.get("https://www.douyin.com/", impersonate="chrome")
     res = session.get("https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web&detail_list=1&round_trip_time=50", impersonate="chrome")
     if res.status_code == 200:
         data = res.json()
