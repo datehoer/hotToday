@@ -22,6 +22,7 @@ def get_youshedubao_data():
     res = requests.get(url, headers=headers, timeout=30)
     doc = pyquery.PyQuery(res.content)
     items = doc(".news-main>script").text()
-    uisdc_news = re.findall('var uisdc_news="(.*?)";', items)[0]
+    uisdc_news = re.findall('var uisdc_news = "(.*?)";', items)[0]
     uisdc_news = json.loads(uisdc_news.replace('\\"', '"').replace("\\\\", "\\"))
     return {"data": uisdc_news}
+print(get_youshedubao_data())

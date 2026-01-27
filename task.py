@@ -164,8 +164,10 @@ def fetch(url, header):
 
 
 def get_weibo_data():
-    weibo_url = "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25%26t%3D3%26disable_hot%3D1%26filter_type%3Drealtimehot"
+    weibo_url = "https://weibo.com/ajax/side/hotSearch"
     table_name = "weibo_hot_search"
+    headers = headers.copy()
+    headers['referer'] = "https://weibo.com/"
     data = httpx.get(weibo_url, timeout=HTTP_TIMEOUT).json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
@@ -356,7 +358,7 @@ if __name__ == "__main__":
         safe_insert("github", get_github_data)
         # safe_insert("google_search", get_googlesearch_data)
         safe_insert("hupu", get_hupu_data)
-        # safe_insert("huxiu", get_huxiu_data)
+        safe_insert("huxiu", get_huxiu_data)
         safe_insert("ithome", get_ithome_data)
         safe_insert("openeye", get_openeye_data)
         safe_insert("kanxue", get_kanxue_data)
