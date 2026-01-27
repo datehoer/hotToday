@@ -168,7 +168,7 @@ def get_weibo_data():
     table_name = "weibo_hot_search"
     headers = headers.copy()
     headers['referer'] = "https://weibo.com/"
-    data = httpx.get(weibo_url, timeout=HTTP_TIMEOUT).json()
+    data = httpx.get(weibo_url, timeout=HTTP_TIMEOUT, headers=headers).json()
     data['insert_time'] = time.time()
     insert_data(table_name, data)
 
