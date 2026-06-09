@@ -23,6 +23,11 @@ def get_youshedubao_data():
     doc = pyquery.PyQuery(res.content)
     items = doc(".news-main>script").text()
     uisdc_news = re.findall('var uisdc_news = "(.*?)";', items)[0]
-    uisdc_news = json.loads(uisdc_news.replace('\\"', '"').replace("\\\\", "\\"))
+    uisdc_news = json.loads(
+        uisdc_news.replace('\\"', '"').replace("\\\\", "\\").replace("\\'", "'")
+    )
     return {"data": uisdc_news}
-print(get_youshedubao_data())
+
+
+if __name__ == "__main__":
+    print(get_youshedubao_data())
