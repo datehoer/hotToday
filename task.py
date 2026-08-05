@@ -11,7 +11,7 @@ from dianshangbao.dianshangbao import get_dianshangbao_data
 from diyicaijing.diyicaijing import get_diyicaijing_data
 from dongchedi.dongchedi import get_dongchedi_hot_search
 from douban.douban import get_douban_movie_data
-from freebuf.freebuf import get_freebuf_data
+# from freebuf.freebuf import get_freebuf_data
 from githubspider.github import get_github_data
 # from googlesearch.googlesearch import get_googlesearch_data
 from mcpspider.mcpmarket import get_mcpmarket_data
@@ -21,7 +21,7 @@ from ithome.ithome import get_ithome_data
 from kaiyan.openeye import get_openeye_data
 from kanxue.kanxue import get_kanxue_data   
 from kuandaishan.kuandaishan import get_kuandaishan_data
-from pmcaff.pmcaff import get_pmcaff_data
+# from pmcaff.pmcaff import get_pmcaff_data
 from qichezhijia.qichezhijia import get_qichezhijia_data
 from qidian.qidian import get_rank_list
 from shuimu.shuimu import get_shuimu_data
@@ -47,7 +47,7 @@ from crypto_coin.coin import get_crypto_price
 from ithome.needknow import get_ithome_needknow_data
 from readhub.readhub import get_readhub_data
 from v2ex.v2ex import get_v2ex_data
-from hostloc.hostloc import get_hostloc_data
+# from hostloc.hostloc import get_hostloc_data
 from linuxdo.linuxdo import get_linuxdo_data
 from nodeseek.nodeseek import get_nodeseek_data
 from wsj.wsj import get_wsj_data
@@ -218,9 +218,8 @@ def get_bilibili_hot_data():
     table_name = 'bilibili_hot'
     err = 5
     while err > 0:
-        # -352 风控：需要带 Referer 和浏览器指纹
+        # 实测：bilibili 对 Referer 头触发风控(-352)，只带 UA + impersonate 指纹可稳定 200
         bili_headers = {
-            "Referer": "https://www.bilibili.com/",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
         }
         res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome")
@@ -377,7 +376,7 @@ if __name__ == "__main__":
         safe_insert("diyicaijing", get_diyicaijing_data)
         safe_insert("dongchedi", get_dongchedi_hot_search)
         safe_insert("douban_movie", get_douban_movie_data)
-        safe_insert("freebuf", get_freebuf_data)
+        # safe_insert("freebuf", get_freebuf_data)
         safe_insert("github", get_github_data)
         # safe_insert("google_search", get_googlesearch_data)
         safe_insert("hupu", get_hupu_data)
@@ -386,7 +385,7 @@ if __name__ == "__main__":
         safe_insert("openeye", get_openeye_data)
         safe_insert("kanxue", get_kanxue_data)
         safe_insert("kuandaishan", get_kuandaishan_data)
-        safe_insert("pmcaff", get_pmcaff_data)
+        # safe_insert("pmcaff", get_pmcaff_data)
         safe_insert("qichezhijia", get_qichezhijia_data)
         safe_insert("qidian", get_rank_list)
         safe_insert("shuimu", get_shuimu_data)
@@ -410,7 +409,7 @@ if __name__ == "__main__":
         safe_insert("readhub", get_readhub_data)
         safe_insert("needknow", get_ithome_needknow_data)
         safe_insert("v2ex", get_v2ex_data)
-        safe_insert("hostloc", get_hostloc_data)
+        # safe_insert("hostloc", get_hostloc_data)
         safe_insert("linuxdo", get_linuxdo_data)
         safe_insert("nodeseek", get_nodeseek_data)
         # safe_insert("wsj", get_wsj_data)

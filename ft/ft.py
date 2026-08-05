@@ -31,8 +31,8 @@ def get_ft_data():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
     session = requests.Session()
-    kwargs = {"proxies": {"http": PROXY, "https": PROXY}, "verify": False} if PROXY else {"verify": False}
-    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99", **kwargs)
+    kwargs = {"proxies": {"http": PROXY, "https": PROXY}} if PROXY else {}
+    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99", verify=False, **kwargs)
     doc = pyquery.PyQuery(res.text)
     items = doc(".o-teaser-collection__list>li a.js-teaser-heading-link").items()
     data = []

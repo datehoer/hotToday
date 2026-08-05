@@ -20,7 +20,7 @@ def get_hostloc_data():
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     }
-    kwargs = {"proxies": {"http": PROXY, "https": PROXY}} if PROXY else {}
+    kwargs = {"proxies": {"http": PROXY, "https": PROXY}, "verify": False} if PROXY else {"verify": False}
     try:
         session = requests.Session()
         session.headers.update(headers)

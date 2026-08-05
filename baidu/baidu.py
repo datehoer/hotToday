@@ -4,9 +4,20 @@ from curl_cffi import requests
 import pyquery
 import re
 import json
+import os
+try:
+    from config import PROXY
+except ImportError:
+    PROXY = None
+if not PROXY:
+    PROXY = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
+
+
 def get_baidu_data():
     url = "https://top.baidu.com/board?tab=realtime"
-    response = requests.get(url, timeout=30)
+    kwargs = {"proxies": {"http": PROXY, "https": PROXY}} if PROXY else {}
+    # 实测：本机/容器直连 top.baidu.com 超时(被限流)，经代理可稳定 200
+    response = requests.get(url, timeout=30, impersonate="chrome", **kwargs)
     doc = pyquery.PyQuery(response.content)
 
     search_tabs_data = doc("#sanRoot").html()
