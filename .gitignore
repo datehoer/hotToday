@@ -1,5 +1,6 @@
 .idea
 config.py
+.env
 **/__pycache__
 test.py
 .playwright-mcp/
