@@ -13,9 +13,9 @@ def get_newsau_data():
         'referer': 'https://www.news.com.au/',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
-    res = requests.get(url, headers=headers, timeout=30)
+    res = requests.get(url, headers=headers, timeout=30, impersonate="chrome")
     doc = pyquery.PyQuery(res.text)
-    items = doc("h4.storyblock_title").items()
+    items = doc(".storyblock_title").items()
     data = []
     for item in items:
         title = item.find("a").text()

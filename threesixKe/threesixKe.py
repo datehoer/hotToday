@@ -1,41 +1,23 @@
-import requests
-import time
-import pyquery
-from urllib.parse import urljoin
-# urls = ['https://www.36kr.com/hot-list/renqi/', 'https://www.36kr.com/hot-list/zonghe/', 'https://www.36kr.com/hot-list/shoucang/']
-urls = ['https://www.36kr.com/hot-list/renqi/']
-# get now date
-now = time.strftime("%Y-%m-%d", time.localtime())
-
-
-def analysis_detail(doc):
-    hot_list = []
-    tabs = doc(".article-list>.article-wrapper").items()
-    for tab in tabs:
-        title = tab.find(".article-item-info>p>a").text()
-        tab_url = urljoin('https://www.36kr.com', tab.find(".article-item-info>p>a").attr("href"))
-        hotScore = tab.find("span>span").text()
-        hot_list.append({
-            "title": title,
-            "url": tab_url,
-            "hotScore": hotScore
-        })
-    return hot_list
+from curl_cffi import requests
+import xml.etree.ElementTree as ET
 
 def get_36kr_data():
+    # 原 HTML 页面被火山引擎安全检测拦截，改用官方 RSS
+    url = "https://www.36kr.com/feed"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    res = requests.get(url, headers=headers, timeout=30, impersonate="chrome")
+    root = ET.fromstring(res.content)
     data = []
-    for url in urls:
-        link = url + now + "/1"
-        res = requests.get(link, timeout=30)
-        soup = pyquery.PyQuery(res.content)
-        data.extend(analysis_detail(soup))
-    numbers = soup(".pagination-wrapper>a").items()
-    for num in numbers:
-        page = num.text()
-        if page == "1":
+    for it in root.findall(".//item"):
+        title = it.findtext("title")
+        link = it.findtext("link")
+        if not title:
             continue
-        link = url + now + "/" + num.text()
-        res = requests.get(link, timeout=30)
-        soup = pyquery.PyQuery(res.content)
-        data.extend(analysis_detail(soup))
-    return {"data":data}
+        data.append({
+            "title": title,
+            "url": link,
+            "hotScore": 0,
+        })
+    return {"data": data}

@@ -1,7 +1,13 @@
 from curl_cffi import requests
 import pyquery
 from urllib.parse import urljoin
-from config import PROXY
+import os
+try:
+    from config import PROXY
+except ImportError:
+    PROXY = None
+if not PROXY:
+    PROXY = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or None
 def get_ft_data():
     url = "https://www.ft.com/world"
     headers = {
@@ -25,7 +31,8 @@ def get_ft_data():
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     }
     session = requests.Session()
-    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99", proxies={"http": PROXY, "https": PROXY}, verify=False)
+    kwargs = {"proxies": {"http": PROXY, "https": PROXY}, "verify": False} if PROXY else {"verify": False}
+    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99", **kwargs)
     doc = pyquery.PyQuery(res.text)
     items = doc(".o-teaser-collection__list>li a.js-teaser-heading-link").items()
     data = []

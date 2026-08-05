@@ -1,7 +1,8 @@
-import requests
+from curl_cffi import requests
 import pyquery
 import json
 import re
+
 def get_youshedubao_data():
     url = "https://www.uisdc.com/news"
     headers = {
@@ -19,10 +20,15 @@ def get_youshedubao_data():
         "upgrade-insecure-requests": "1",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    res = requests.get(url, headers=headers, timeout=30)
+    try:
+        res = requests.get(url, headers=headers, timeout=30, impersonate="chrome")
+    except Exception:
+        import requests as plain_requests
+        res = plain_requests.get(url, headers=headers, timeout=30)
     doc = pyquery.PyQuery(res.content)
     items = doc(".news-main>script").text()
-    uisdc_news = re.findall('var uisdc_news = "(.*?)";', items)[0]
-    uisdc_news = json.loads(uisdc_news.replace('\\"', '"').replace("\\\\", "\\"))
+    matches = re.findall('var uisdc_news = "(.*?)";', items)
+    if not matches:
+        return {"data": []}
+    uisdc_news = json.loads(matches[0].replace('\\"', '"').replace("\\\\", "\\"))
     return {"data": uisdc_news}
-print(get_youshedubao_data())

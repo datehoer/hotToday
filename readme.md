@@ -66,7 +66,7 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - ~~雪球热门 (Xueqiu Hot Topics)~~
 - 易车热门 (Yiche Hot Topics)
 - 优设读报 (Uisdc News)
-- 游戏葡萄文章推荐 (GameGrape Article Recommendations)
+- 游戏陀螺文章推荐 (Youxituoluo Game News，原游戏葡萄 youxiputao 官网已停更迁移)
 - 站酷榜单 (Zcool Rankings)
 - 纵横24小时畅销榜 (Zongheng 24h Bestseller Rankings)
 - hacknews

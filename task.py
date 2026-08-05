@@ -51,7 +51,7 @@ from hostloc.hostloc import get_hostloc_data
 from linuxdo.linuxdo import get_linuxdo_data
 from nodeseek.nodeseek import get_nodeseek_data
 from wsj.wsj import get_wsj_data
-# from nytimes.nytimes import get_nytimes_data
+from nytimes.nytimes import get_nytimes_data
 from bloomberg.bloomberg import get_bloomberg_data
 from ft.ft import get_ft_data
 from yna.yna import get_yna_data
@@ -218,7 +218,11 @@ def get_bilibili_hot_data():
     table_name = 'bilibili_hot'
     err = 5
     while err > 0:
-        bili_headers = {}
+        # -352 风控：需要带 Referer 和浏览器指纹
+        bili_headers = {
+            "Referer": "https://www.bilibili.com/",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        }
         res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome")
         data = res.json()
         data_code = data.get("code", 352)
@@ -227,7 +231,7 @@ def get_bilibili_hot_data():
             break
         else:
             err -= 1
-            logger.warning("bilibili_hot data get error")
+            logger.warning(f"bilibili_hot data get error code={data_code}, retries_left={err}")
             time.sleep(3)
 
 
@@ -277,6 +281,10 @@ def insert_data(table_name, data):
         cursor = conn.cursor()
         if "data" in data:
             data = data["data"]
+        # 空结果同样视为失败，避免把 {"data": []} 当作成功写入
+        if data is None or (isinstance(data, (list, dict, str)) and len(data) == 0):
+            logger.error(f"{table_name} data is empty, skip insert")
+            return
         logger.info(f'Inserting "{table_name}"...')
         cursor.execute(
             f'INSERT INTO "{table_name}" (data, insert_time) VALUES (%s, %s)',
@@ -406,7 +414,7 @@ if __name__ == "__main__":
         safe_insert("linuxdo", get_linuxdo_data)
         safe_insert("nodeseek", get_nodeseek_data)
         # safe_insert("wsj", get_wsj_data)
-        # safe_insert("nytimes", get_nytimes_data)
+        safe_insert("nytimes", get_nytimes_data)
         safe_insert("bloomberg", get_bloomberg_data)
         safe_insert("ft", get_ft_data)
         safe_insert("yna", get_yna_data)

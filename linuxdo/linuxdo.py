@@ -1,13 +1,23 @@
 from curl_cffi import requests
-import pyquery
-from urllib.parse import urljoin
-import json
+import xml.etree.ElementTree as ET
+
 def get_linuxdo_data():
-    url = "https://linux.do/top"
+    # 页面被 Cloudflare 拦截，改用 Discourse RSS 接口
+    url = "https://linux.do/top.rss"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    res = requests.get(url, headers=headers, timeout=30, impersonate="chrome")
-    doc = pyquery.PyQuery(res.text)
-    json_data = json.loads(json.loads(doc("discourse-assets-json>div").attr("data-preloaded"))['topic_list'])['topic_list']['topics']
-    return {"data":json_data}
+    res = requests.get(url, headers=headers, timeout=30, impersonate="chrome120")
+    root = ET.fromstring(res.content)
+    data = []
+    for it in root.findall(".//item"):
+        title = it.findtext("title")
+        link = it.findtext("link")
+        if not title:
+            continue
+        data.append({
+            "title": title,
+            "url": link,
+            "hotScore": 0,
+        })
+    return {"data": data}
