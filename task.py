@@ -35,7 +35,7 @@ from woshipm.woshipm import get_woshipm_data
 from xueqiu.xueqiu import get_xueqiu_data
 from yiche.yiche import get_yiche_data
 from youshedubao.youshedubao import get_youshedubao_data
-from youxiputao.youxiputao import get_youxiputao_data
+# from youxiputao.youxiputao import get_youxiputao_data
 from zhanku.zhanku import get_zhanku_data
 from zongheng.zongheng import get_zongheng_data
 from coolan.coolan import get_cool
@@ -422,7 +422,7 @@ if __name__ == "__main__":
         # safe_insert("xueqiu", get_xueqiu_data)
         safe_insert("yiche", get_yiche_data)
         safe_insert("youshedubao", get_youshedubao_data)
-        safe_insert("youxiputao", get_youxiputao_data)
+        # safe_insert("youxiputao", get_youxiputao_data)
         safe_insert("zhanku", get_zhanku_data)
         safe_insert("zongheng", get_zongheng_data)
         # safe_insert("coolan", get_cool)
