@@ -70,6 +70,7 @@ from thehackernews.thehackernews import get_thehackernews_data
 from steam.steam import get_steam_data
 from ifanr.ifanr import get_ifanr_data
 from googlenews.googlenews import get_googlenews_data
+from jin10.jin10 import get_jin10_data
 import psycopg2
 import time
 import httpx
@@ -461,6 +462,7 @@ if __name__ == "__main__":
         safe_insert("steam", get_steam_data)
         safe_insert("ifanr", get_ifanr_data)
         safe_insert("googlenews", get_googlenews_data)
+        safe_insert("jin10", get_jin10_data)
     except Exception as error:
         logger.exception(f"some error happen: {error}")
     finally:
