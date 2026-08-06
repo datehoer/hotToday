@@ -67,6 +67,9 @@ from asahi.asahi import get_asahi_data
 from dzenru.dzenru import get_dzenru_data
 from secrss.secrss import get_secrss_data
 from thehackernews.thehackernews import get_thehackernews_data
+from steam.steam import get_steam_data
+from ifanr.ifanr import get_ifanr_data
+from googlenews.googlenews import get_googlenews_data
 import psycopg2
 import time
 import httpx
@@ -455,6 +458,9 @@ if __name__ == "__main__":
         safe_insert("mcpmarket", get_mcpmarket_data)
         safe_insert("secrss", get_secrss_data)
         safe_insert("thehackernews", get_thehackernews_data)
+        safe_insert("steam", get_steam_data)
+        safe_insert("ifanr", get_ifanr_data)
+        safe_insert("googlenews", get_googlenews_data)
     except Exception as error:
         logger.exception(f"some error happen: {error}")
     finally:
