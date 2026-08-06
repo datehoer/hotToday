@@ -65,6 +65,8 @@ from fivech.fivech import get_5ch_data
 from dailymail.dailymail import get_dailymail_data
 from asahi.asahi import get_asahi_data
 from dzenru.dzenru import get_dzenru_data
+from secrss.secrss import get_secrss_data
+from thehackernews.thehackernews import get_thehackernews_data
 import psycopg2
 import time
 import httpx
@@ -451,6 +453,8 @@ if __name__ == "__main__":
         safe_insert("fivech", get_5ch_data)
         safe_insert("dzenru", get_dzenru_data)
         safe_insert("mcpmarket", get_mcpmarket_data)
+        safe_insert("secrss", get_secrss_data)
+        safe_insert("thehackernews", get_thehackernews_data)
     except Exception as error:
         logger.exception(f"some error happen: {error}")
     finally:
