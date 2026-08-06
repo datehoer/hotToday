@@ -71,7 +71,7 @@ import httpx
 from curl_cffi import requests
 import random
 import json
-from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD
+from config import PG_HOST, PG_DB, PG_PORT, PG_USER, PG_PASSWORD, PROXY
 import os
 import glob
 import sys
@@ -217,13 +217,22 @@ def get_bilibili_hot_data():
     bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking/v2"
     table_name = 'bilibili_hot'
     err = 5
+    # 实测：bilibili 对 Referer 头触发风控(-352)，只带 UA + impersonate 指纹更好
+    bili_headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+    }
+    proxy_kwargs = {"proxies": {"http": PROXY, "https": PROXY}} if PROXY else {}
     while err > 0:
-        # 实测：bilibili 对 Referer 头触发风控(-352)，只带 UA + impersonate 指纹可稳定 200
-        bili_headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-        }
-        res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome")
-        data = res.json()
+        # -352 是时间窗口式 IP 风控，直连与代理交替尝试，任一出口命中放行窗口即可
+        kwargs = proxy_kwargs if err % 2 == 0 else {}
+        try:
+            res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome", **kwargs)
+            data = res.json()
+        except Exception as exc:
+            err -= 1
+            logger.warning(f"bilibili_hot fetch exception retries_left={err}: {exc}")
+            time.sleep(3)
+            continue
         data_code = data.get("code", 352)
         if data_code == 0:
             insert_data(table_name, data)
