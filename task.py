@@ -214,19 +214,17 @@ def get_douyin_hot_data():
 
 
 def get_bilibili_hot_data():
-    bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking/v2"
+    # v2 接口被 IP 级时间窗口风控(-352)封锁（直连/代理出口都命中，实测放行率约 30%）。
+    # v1 接口 + 移动端 UA 实测稳定 code=0（多次连测全部成功）。
+    bilibili_hot_url = "https://api.bilibili.com/x/web-interface/ranking"
     table_name = 'bilibili_hot'
     err = 5
-    # 实测：bilibili 对 Referer 头触发风控(-352)，只带 UA + impersonate 指纹更好
     bili_headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
     }
-    proxy_kwargs = {"proxies": {"http": PROXY, "https": PROXY}} if PROXY else {}
     while err > 0:
-        # -352 是时间窗口式 IP 风控，直连与代理交替尝试，任一出口命中放行窗口即可
-        kwargs = proxy_kwargs if err % 2 == 0 else {}
         try:
-            res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT, impersonate="chrome", **kwargs)
+            res = requests.get(bilibili_hot_url, headers=bili_headers, timeout=HTTP_TIMEOUT)
             data = res.json()
         except Exception as exc:
             err -= 1
@@ -235,7 +233,23 @@ def get_bilibili_hot_data():
             continue
         data_code = data.get("code", 352)
         if data_code == 0:
-            insert_data(table_name, data)
+            # v1 字段(play/video_review/coins)转成 parse_bilibili_hot 期望的 stat/short_link_v2 形态
+            converted = []
+            for it in data["data"]["list"]:
+                converted.append({
+                    "title": it["title"],
+                    "short_link_v2": "https://www.bilibili.com/video/" + it["bvid"],
+                    "stat": {
+                        "view": it["play"],
+                        "danmaku": 0,
+                        "reply": it["video_review"],
+                        "favorite": 0,
+                        "coin": it["coins"],
+                        "share": 0,
+                        "like": 0,
+                    },
+                })
+            insert_data(table_name, {"data": {"list": converted}})
             break
         else:
             err -= 1
