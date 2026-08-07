@@ -473,4 +473,24 @@ if __name__ == "__main__":
             logger.info(f"Commit done in {time.monotonic() - commit_start:.2f}s")
         finally:
             conn.close()
+        # 爬取完成后增量清洗: 新行 upsert 到 hot_topic (独立连接, 失败不影响主流程)
+        etl_start = time.monotonic()
+        new_titles = 0
+        try:
+            from etl.incremental import run_incremental
+            new_titles = run_incremental()
+            logger.info(f"ETL done in {time.monotonic() - etl_start:.2f}s, new titles: {new_titles}")
+        except Exception as e:
+            logger.exception(f"ETL error: {e}")
+
+        # 新增 title 向量化 (无条件跑: 幂等只处理 embedding IS NULL, 残留失败自动补)
+        emb_start = time.monotonic()
+        try:
+            from etl.embedding_backfill import run_embedding_incremental
+            done, failed = run_embedding_incremental(limit=8000)
+            logger.info(f"Embedding done in {time.monotonic() - emb_start:.2f}s, "
+                        f"success {done}, failed {failed}")
+        except Exception as e:
+            logger.exception(f"Embedding error: {e}")
+
         logger.info(f"task.py done in {time.monotonic() - run_start:.2f}s")
