@@ -11,6 +11,9 @@ mongodb -> postgresql
 2025.3.3 修改：
 - 将mongo改为了postgresql
 
+2026.8.7 修改：
+- 新增热榜数据清洗链路: 增量 ETL + embedding 向量化 (见下方「清洗链路 (ETL)」)
+
 如果有什么问题/需求，欢迎提issue。
 (Using requests for data collection, with some data obtained through parameter reverse engineering.
 If you have any questions/requirements, please feel free to create an issue.)
@@ -98,3 +101,30 @@ todo:
 - https://www.macrumors.com/
 - https://thenextweb.com/
 - https://www.theguardian.com/
+
+---
+
+## 清洗链路 (ETL)
+
+爬虫每小时整点运行 `task.py`，完成后自动执行增量清洗 + 向量化：
+
+1. `etl/incremental.py` - 从 82 张源表按 checkpoint 水位线增量提取，upsert 到 `hot_topic` 汇总表
+2. `etl/embedding_backfill.py` - 对 `hot_topic` 中 `embedding IS NULL` 的行调用 text-embedding-3-small 批量向量化（幂等断点续跑）
+3. `etl/backfill.py` - 历史回填工具（手动运行）
+4. `etl/extractors.py` - 各源表数据解析（title/url/hot_value）
+
+### 新环境部署
+
+```bash
+# 1. 建表（幂等，可重复执行；需要 postgresql-16-pgvector 已安装）
+psql -h <PG_HOST> -U admin -d hotday -f etl/schema.sql
+
+# 2. 回填历史（可选，近 N 个月）
+python etl/backfill.py --months 3
+
+# 3. 增量+向量化由每小时 task.py 自动触发；也可手动跑一次
+python etl/incremental.py
+python etl/embedding_backfill.py --limit 8000
+```
+
+依赖：`psycopg2`、`httpx`、PostgreSQL 16 + pgvector 扩展。
