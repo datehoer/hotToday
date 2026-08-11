@@ -61,8 +61,10 @@ def upsert(cur, rows):
         VALUES %s
         ON CONFLICT (source, title) DO UPDATE SET
             last_seen  = EXCLUDED.last_seen,
-            seen_count = hot_topic.seen_count + EXCLUDED.seen_count,
-            url        = COALESCE(hot_topic.url, EXCLUDED.url)
+            seen_count = CASE WHEN EXCLUDED.last_seen > hot_topic.last_seen
+                              THEN hot_topic.seen_count + EXCLUDED.seen_count
+                              ELSE hot_topic.seen_count END,
+            url        = COALESCE(NULLIF(hot_topic.url, ''), EXCLUDED.url)
     """
     execute_values(cur, sql, rows, page_size=BATCH)
     return len(rows)
