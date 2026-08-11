@@ -37,7 +37,7 @@ UPSERT_SQL = """
         seen_count = CASE WHEN EXCLUDED.last_seen > hot_topic.last_seen
                           THEN hot_topic.seen_count + 1
                           ELSE hot_topic.seen_count END,
-        url        = COALESCE(hot_topic.url, EXCLUDED.url),
+        url        = COALESCE(NULLIF(hot_topic.url, ''), EXCLUDED.url),
         hot_value  = COALESCE(NULLIF(hot_topic.hot_value, ''), EXCLUDED.hot_value)
 """
 

@@ -17,6 +17,10 @@ URL_KEYS = ('url', 'link', 'uri', 'short_link_v2', 'topic_url', 'articleLink',
 HOT_KEYS = ('hot_value', 'hotScore', 'HotValue', 'viewCount', 'viewsNum',
             'pageviews', 'idx_num', 'rank', 'view', 'stars', 'hot')
 
+# 这些源结构已知, hotNews 为空时应返回空列表, 不启用通用兜底
+# (否则会从 editorHandpicked 等其他栏目误提取频道名/非热榜条目)
+NO_GENERIC_FALLBACK = {'pengpai'}
+
 # 特殊表: 价格/序号等需要清洗 title
 PRICE_RE = re.compile(r'\s+\$[\d,]+(?:\.\d+)?%?\s*$')
 ORD_RE = re.compile(r'^\d+\.\s*')
@@ -217,9 +221,14 @@ def extract_items(source, data):
                 gid = item.get('group_id') if isinstance(item, dict) else None
                 if gid:
                     u = f'https://www.douyin.com/hot/{gid}'
+            elif source == 'pengpai' and not u:
+                # 澎湃站内内容的 link 字段为空, 用 contId 拼详情页 URL
+                cid = item.get('contId') if isinstance(item, dict) else None
+                if cid:
+                    u = f'https://www.thepaper.cn/newsDetail_forward_{cid}'
             items.append((t, u, h))
-        # 兜底: 配置没提取到但结构里有 title
-        if not items:
+        # 兜底: 配置没提取到但结构里有 title (pengpai 等已知结构源除外)
+        if not items and source not in NO_GENERIC_FALLBACK:
             items = _generic_extract(data)
     else:
         items = _generic_extract(data)
