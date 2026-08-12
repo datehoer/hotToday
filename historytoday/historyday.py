@@ -23,10 +23,12 @@ def get_history_today():
     doc = pyquery.PyQuery(response.content)
     things = doc(".tih-list>dl>dt").items()
     data = []
+    # 360 好搜"历史上的今天"页面没有单条事件链接，统一指回来源页
+    source_url = "https://hao.360.com/histoday/"
     for thing in things:
         data.append({
             "title": thing.text(),
-            "url": "",
+            "url": source_url,
             "hotScore": 0
         })
     return {"data": data}
