@@ -9,11 +9,13 @@
 """
 import html
 import re
+from urllib.parse import quote
 
 TITLE_KEYS = ('title', 'name', 'word', 'hot_label', 'articleTitle', 'bookName',
               'topic_name', 'questionTitle', 'rankingTitle', 'Title')
 URL_KEYS = ('url', 'link', 'uri', 'short_link_v2', 'topic_url', 'articleLink',
-            'article_link', 'pageUrl', 'Url', 'href', 'target.url')
+            'article_link', 'articleDetailUrl', 'pageUrl', 'pcLinkUrl', 'Url',
+            'href', 'shareUrl', 'deepLink', 'target.url')
 HOT_KEYS = ('hot_value', 'hotScore', 'HotValue', 'viewCount', 'viewsNum',
             'pageviews', 'idx_num', 'rank', 'view', 'stars', 'hot')
 
@@ -92,7 +94,7 @@ EXTRACTORS = {
     '36kr':            ('[0]', 'title', 'url', None),
     '3dm':             ('[0]', 'title', 'url', None),
     '52pj':            ('[0]', 'title', 'url', None),
-    'acfun':           ('[0]', 'title', 'url', None),
+    'acfun':           ('[0]', 'title', 'shareUrl', None),
     'anquanke':        ('list', 'title', 'url', None),
     'asahi':           ('[0]', 'title', 'url', None),
     'baidu_hot_search':('[0]', 'title', 'url', None),
@@ -101,7 +103,7 @@ EXTRACTORS = {
     'bloomberg':       ('[0]', 'title', 'url', None),
     'coolan':          ('[0]', 'title', 'url', None),
     'crypto_coin':     ('[0]', 'title', 'url', 'hotScore'),
-    'csdn':            ('[0]', 'articleTitle', 'articleLink', 'hotRankScore'),
+    'csdn':            ('[0]', 'articleTitle', 'articleDetailUrl', 'hotRankScore'),
     'dailymail':       ('[0]', 'title', 'url', None),
     'dianshangbao':    ('[0]', 'title', 'url', None),
     'diyicaijing':     ('[0]', 'title', 'url', None),
@@ -120,7 +122,7 @@ EXTRACTORS = {
     'ifanr':           ('[0]', 'title', 'url', None),
     'ithome':          ('[0]', 'title', 'url', None),
     'jin10':           ('[0]', 'title', 'url', None),
-    'juejin_hot':      ('[0]', 'content.title', 'content.url', None),
+    'juejin_hot':      ('[0]', 'content.title', None, None),
     'kanxue':          ('[0]', 'title', 'url', None),
     'kuandaishan':     ('[0]', 'title', 'url', None),
     'lemonde':         ('[0]', 'title', 'url', None),
@@ -134,13 +136,13 @@ EXTRACTORS = {
     'nodeseek':        ('[0]', 'title', 'url', None),
     'nytimes':         ('[0]', 'title', 'url', None),
     'pengpai':         ('hotNews', 'name', 'link', None),
-    'pmcaff':          ('[0]', 'title', 'url', None),
+    'pmcaff':          ('[0]', 'title', 'pageUrl', None),
     'qichezhijia':     ('[0]', 'title', 'url', None),
     'qidian':          ('[0]', 'title', 'url', None),
     'readhub':         ('[0]', 'title', 'url', None),
     'rt':              ('[0]', 'title', 'url', None),
     'secrss':          ('[0]', 'title', 'url', None),
-    'shaoshupai_hot':  ('[0]', 'title', 'url', None),
+    'shaoshupai_hot':  ('[0]', 'title', None, None),
     'shuimu':          ('[0]', 'title', 'url', None),
     'sina':            ('[0]', 'title', 'url', None),
     'sina_news':       ('[0]', 'title', 'url', None),
@@ -154,16 +156,16 @@ EXTRACTORS = {
     'v2ex':            ('[0]', 'title', 'url', None),
     'wallstreetcn':    ('day_items', 'title', 'uri', None),
     'weibo_hot_search':('realtime', 'word', 'url', None),
-    'woshipm':         ('[0]', 'data.articleTitle', 'data.url', None),
-    'wx_read_rank':    ('books', 'bookInfo.title', 'bookInfo.url', None),
+    'woshipm':         ('[0]', 'data.articleTitle', None, None),
+    'wx_read_rank':    ('books', 'bookInfo.title', 'bookInfo.deepLink', None),
     'xueqiu':          ('[0]', 'title', 'url', None),
-    'yiche':           ('[0]', 'title', 'url', None),
+    'yiche':           ('[0]', 'title', 'pcLinkUrl', None),
     'yna':             ('[0]', 'title', 'url', None),
     'youshedubao':     ('[0].dubao', 'title', 'url', None),
     'youxiputao':      ('[0]', 'title', 'url', 'hotScore'),
     'zhanku':          ('[0]', 'rankingTitle', 'pageUrl', None),
     'zhihu_hot_list':  ('[0]', 'target.title', 'target.url', None),
-    'zongheng':        ('resultList', 'bookName', 'bookUrl', None),
+    'zongheng':        ('resultList', 'bookName', None, None),
     # 以下表当前抓取为空或结构特殊, 用通用兜底
     'douban_movie':    ('[0].data', 'title', 'url', 'hotScore'),
     'freebuf':         ('[0]', 'title', 'url', None),
@@ -197,6 +199,39 @@ def _generic_extract(data):
     return items
 
 
+# 源站条目没有可直接取到的 url 字段时, 按各自规则拼接 (it: 条目 dict, t: 清洗后的 title)
+URL_BUILDERS = {
+    'weibo_hot_search': lambda it, t: 'https://s.weibo.com/weibo?q=' + quote(t),
+    'douyin_hot': lambda it, t: ('https://www.douyin.com/hot/' + str(it['group_id'])
+                                 if isinstance(it, dict) and it.get('group_id') else None),
+    'pengpai': lambda it, t: ('https://www.thepaper.cn/newsDetail_forward_' + str(it['contId'])
+                              if isinstance(it, dict) and it.get('contId') else None),
+    'woshipm': lambda it, t: ('https://www.woshipm.com/{}/{}.html'.format(
+                                  it.get('data', {}).get('type'), it.get('data', {}).get('id'))
+                              if isinstance(it.get('data'), dict) and it.get('data', {}).get('id')
+                              else None),
+    'juejin_hot': lambda it, t: ('https://juejin.cn/post/' + str(it.get('content', {}).get('content_id'))
+                                 if isinstance(it.get('content'), dict)
+                                 and it.get('content', {}).get('content_id') else None),
+    'shaoshupai_hot': lambda it, t: ('https://sspai.com/post/' + str(it.get('id'))
+                                     if isinstance(it, dict) and it.get('id') else None),
+    'zongheng': lambda it, t: ('https://www.zongheng.com/detail/' + str(it.get('bookId'))
+                               if isinstance(it, dict) and it.get('bookId') else None),
+    'youshedubao': lambda it, t: 'https://www.uisdc.com/news',
+}
+
+
+def _build_url(source, item, title):
+    """源站条目取不到 url 字段时, 按来源规则拼接链接; 无规则返回 None"""
+    builder = URL_BUILDERS.get(source)
+    if not builder:
+        return None
+    try:
+        return builder(item, title)
+    except Exception:
+        return None
+
+
 def extract_items(source, data):
     """返回 [(title, url, hot_value), ...]"""
     cfg = EXTRACTORS.get(source)
@@ -213,19 +248,8 @@ def extract_items(source, data):
                 continue
             u = _pick(item, url_path)
             h = _pick(item, hot_path)
-            # 无 url 的补生成: 微博热搜 / 抖音
-            if source == 'weibo_hot_search' and not u:
-                from urllib.parse import quote
-                u = 'https://s.weibo.com/weibo?q=' + quote(t)
-            elif source == 'douyin_hot' and not u:
-                gid = item.get('group_id') if isinstance(item, dict) else None
-                if gid:
-                    u = f'https://www.douyin.com/hot/{gid}'
-            elif source == 'pengpai' and not u:
-                # 澎湃站内内容的 link 字段为空, 用 contId 拼详情页 URL
-                cid = item.get('contId') if isinstance(item, dict) else None
-                if cid:
-                    u = f'https://www.thepaper.cn/newsDetail_forward_{cid}'
+            if not u:
+                u = _build_url(source, item, t)
             items.append((t, u, h))
         # 兜底: 配置没提取到但结构里有 title (pengpai 等已知结构源除外)
         if not items and source not in NO_GENERIC_FALLBACK:
