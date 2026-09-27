@@ -69,6 +69,7 @@ from secrss.secrss import get_secrss_data
 from thehackernews.thehackernews import get_thehackernews_data
 from steam.steam import get_steam_data
 from ifanr.ifanr import get_ifanr_data
+from editorial_rss import get_editorial_rss_data
 from googlenews.googlenews import get_googlenews_data
 from jin10.jin10 import get_jin10_data
 import psycopg2
@@ -461,6 +462,9 @@ if __name__ == "__main__":
         safe_insert("thehackernews", get_thehackernews_data)
         safe_insert("steam", get_steam_data)
         safe_insert("ifanr", get_ifanr_data)
+        safe_insert("dezeen", lambda: get_editorial_rss_data("dezeen"))
+        safe_insert("gcores", lambda: get_editorial_rss_data("gcores"))
+        safe_insert("designboom", lambda: get_editorial_rss_data("designboom"))
         safe_insert("googlenews", get_googlenews_data)
         safe_insert("jin10", get_jin10_data)
     except Exception as error:
