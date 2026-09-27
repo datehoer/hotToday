@@ -29,12 +29,32 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD  # noqa: E402
 
 EMBED_URL = "https://api.hotday.uk/v1/embeddings"
-EMBED_KEY = os.environ.get("HOT_EMBED_KEY", "")
 EMBED_MODEL = "text-embedding-3-small"
 BATCH = 2048        # API 批量上限 (文档最大 2048)
 CONCURRENCY = 2     # 并发请求数(网关不稳时调低)
 MAX_RETRIES = 8     # 单批最大重试次数(指数退避)
 
+
+
+def _load_embed_key():
+    key = os.environ.get("HOT_EMBED_KEY", "").strip()
+    if key:
+        return key
+
+    # Direct CLI runs use the scraper repository's local .env file.
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    try:
+        with open(env_path, encoding="utf-8") as env_file:
+            for line in env_file:
+                name, separator, value = line.partition("=")
+                if separator and name.strip() == "HOT_EMBED_KEY":
+                    return value.strip().strip('"\'')
+    except FileNotFoundError:
+        pass
+    return ""
+
+
+EMBED_KEY = _load_embed_key()
 
 
 def get_conn():
@@ -127,6 +147,8 @@ async def worker(sem, client, queue, results):
 
 async def run(limit, table, batch, concurrency):
     """分轮处理: 每轮拉 min(remaining, ROUND) 条, 处理完再拉下一轮, 内存可控"""
+    if not EMBED_KEY:
+        raise RuntimeError("HOT_EMBED_KEY is not configured")
     ROUND = 20000
     conn = get_conn()
     cur = conn.cursor()
