@@ -118,6 +118,10 @@ todo:
 
 每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上这类记为运维处理；用代理或浏览器的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 `HOT_REPAIR_DAILY` 个，默认 4）。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，也能撤销。命令见 `repair.py` 开头。
 
+## 运维中台 (ops/)
+
+仓库分两部分：根目录是爬虫（`task.py`、`plugins.py`、`repair.py`、`sources/`、`etl/`），打进 Docker 镜像；`ops/` 是运维看板 ops.example.com（Next.js 16 + shadcn），不进镜像，单独以 systemd 服务 `hottoday-ops` 运行。看板用只读账号读 `task.py` 每轮写的 `ops` 表和各源表，显示代理池、PostgreSQL、Redis 的状态和当前配置；批准或撤销 AI 修复的补丁时，它在爬虫容器里调用 `repair.py`。构建、部署和登录见 [ops/README.md](ops/README.md)。
+
 ## 清洗链路 (ETL)
 
 爬虫每小时整点运行 `task.py`，完成后自动执行增量清洗 + 向量化：
