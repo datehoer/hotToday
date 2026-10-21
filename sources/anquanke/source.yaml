@@ -1,0 +1,17 @@
+key: anquanke
+name: 安全客
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_anquanke_data
+
+extract:
+  list: list
+  fields:
+    title: title
+    url: url

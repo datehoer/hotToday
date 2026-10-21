@@ -14,7 +14,7 @@ from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD  # noqa: E402
-from etl.extractors import extract_items  # noqa: E402
+from plugins import extract_items  # noqa: E402
 
 BATCH = 5000
 

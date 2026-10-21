@@ -1,0 +1,18 @@
+key: hostloc
+name: HostLoc
+enabled: false
+disabled_reason: "403 限流"
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: subpool
+
+fetch:
+  type: python
+  entry: spider:get_hostloc_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

@@ -1,0 +1,20 @@
+key: wx_read_rank
+name: 微信读书
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 4
+proxy: none
+
+fetch:
+  type: json
+  url: https://weread.qq.com/web/bookListInCategory/rising?rank=1
+  headers:
+    User-Agent: "{ua.desktop}"
+  impersonate: chrome
+
+extract:
+  list: books
+  fields:
+    title: bookInfo.title
+    url: bookInfo.deepLink

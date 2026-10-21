@@ -1,0 +1,17 @@
+key: fivech
+name: "5ch"
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_5ch_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

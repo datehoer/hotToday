@@ -1,0 +1,17 @@
+key: youshedubao
+name: 优设读报
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_youshedubao_data
+
+extract:
+  list: $[*].dubao
+  fields:
+    title: title
+    url: url ?? 'https://www.uisdc.com/news'

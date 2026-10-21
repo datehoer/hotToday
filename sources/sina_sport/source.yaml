@@ -1,0 +1,18 @@
+key: sina_sport
+name: 新浪体育
+enabled: false
+disabled_reason: "2025-05-22 起停用，接口失效"
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_sina_sport_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

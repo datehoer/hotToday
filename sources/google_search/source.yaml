@@ -1,0 +1,18 @@
+key: google_search
+name: Google 热搜
+enabled: false
+disabled_reason: "2025-02-27 起停用"
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_googlesearch_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

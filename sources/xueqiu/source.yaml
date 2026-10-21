@@ -1,0 +1,17 @@
+key: xueqiu
+name: 雪球
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_xueqiu_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

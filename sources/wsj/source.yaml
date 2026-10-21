@@ -1,0 +1,18 @@
+key: wsj
+name: 华尔街日报
+enabled: false
+disabled_reason: "2025-07-21 起停用"
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_wsj_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

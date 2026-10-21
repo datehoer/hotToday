@@ -1,0 +1,18 @@
+key: pengpai
+name: 澎湃新闻
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_pengpai_hot
+
+extract:
+  list: hotNews
+  fields:
+    title: name
+    url: link ?? template('https://www.thepaper.cn/newsDetail_forward_{contId}')
+  generic_fallback: false

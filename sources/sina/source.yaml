@@ -1,0 +1,17 @@
+key: sina
+name: 新浪热榜
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: subpool
+
+fetch:
+  type: python
+  entry: spider:get_sina_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

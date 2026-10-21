@@ -1,0 +1,18 @@
+key: douyin_hot
+name: 抖音热点
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_douyin_hot_data
+
+extract:
+  list: word_list
+  fields:
+    title: word
+    url: template('https://www.douyin.com/hot/{group_id}')
+    heat: hot_value

@@ -1,0 +1,17 @@
+key: yna
+name: 韩联社
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_yna_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

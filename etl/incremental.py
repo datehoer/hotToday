@@ -23,10 +23,10 @@ from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD  # noqa: E402
-from etl.extractors import extract_items  # noqa: E402
+from plugins import extract_items  # noqa: E402
 
 BATCH = 500
-EXCLUDE = {'hot_topic', 'hot_topic_detail', 'etl_checkpoint'}
+EXCLUDE = {'hot_topic', 'hot_topic_detail', 'etl_checkpoint', 'agent_block_log'}  # agent_block_log 是 hot-rank-web 的表
 
 # 幂等 upsert: 重复处理同批不重复累加 seen_count
 UPSERT_SQL = """

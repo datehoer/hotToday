@@ -1,0 +1,17 @@
+key: wallstreetcn
+name: 华尔街见闻
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_wallstreetcn_data
+
+extract:
+  list: day_items
+  fields:
+    title: title
+    url: uri

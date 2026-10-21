@@ -1,0 +1,21 @@
+key: tieba_topic
+name: 贴吧热议
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 4
+proxy: none
+
+fetch:
+  type: json
+  url: https://tieba.baidu.com/hottopic/browse/topicList
+  headers:
+    User-Agent: "{ua.desktop}"
+  impersonate: chrome
+
+extract:
+  list: bang_topic.topic_list
+  fields:
+    title: topic_name
+    url: topic_url
+    heat: idx_num

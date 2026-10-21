@@ -1,0 +1,17 @@
+key: hacknews
+name: Hacker News
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_hacker_news
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

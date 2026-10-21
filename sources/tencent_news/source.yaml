@@ -1,0 +1,17 @@
+key: tencent_news
+name: 腾讯新闻
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_tencent_data
+
+extract:
+  list: $[*].newslist
+  fields:
+    title: title
+    url: url

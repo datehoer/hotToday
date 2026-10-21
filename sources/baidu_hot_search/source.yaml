@@ -1,0 +1,17 @@
+key: baidu_hot_search
+name: 百度热搜
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: subpool
+
+fetch:
+  type: python
+  entry: spider:get_baidu_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

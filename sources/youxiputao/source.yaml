@@ -1,0 +1,19 @@
+key: youxiputao
+name: 游戏葡萄
+enabled: false
+disabled_reason: 官网停更迁移，数据不在 card_table
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_youxiputao_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url
+    heat: hotScore

@@ -1,0 +1,18 @@
+key: pmcaff
+name: PMCAFF
+enabled: false
+disabled_reason: 接口几个月连不上
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_pmcaff_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: pageUrl

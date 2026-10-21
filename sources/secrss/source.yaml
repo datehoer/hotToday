@@ -1,0 +1,17 @@
+key: secrss
+name: 安全内参
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_secrss_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

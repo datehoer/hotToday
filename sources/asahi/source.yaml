@@ -1,0 +1,17 @@
+key: asahi
+name: 朝日新闻
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_asahi_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

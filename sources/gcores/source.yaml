@@ -1,0 +1,17 @@
+key: gcores
+name: 机核
+enabled: true
+schedule: hourly
+timeout: 25s
+retries: 0
+proxy: none
+
+fetch:
+  type: rss
+  url: https://www.gcores.com/rss
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

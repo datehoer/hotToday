@@ -1,0 +1,21 @@
+key: toutiao_hot
+name: 头条热榜
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 4
+proxy: none
+
+fetch:
+  type: json
+  url: https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc
+  headers:
+    User-Agent: "{ua.desktop}"
+  impersonate: chrome
+
+extract:
+  list: $
+  fields:
+    title: Title
+    url: Url
+    heat: HotValue

@@ -1,0 +1,17 @@
+key: "36kr"
+name: "36氪"
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_36kr_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

@@ -1,0 +1,20 @@
+key: shaoshupai_hot
+name: 少数派
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 4
+proxy: none
+
+fetch:
+  type: json
+  url: https://sspai.com/api/v1/article/tag/page/get?limit=50&tag=%E7%83%AD%E9%97%A8%E6%96%87%E7%AB%A0
+  headers:
+    User-Agent: "{ua.desktop}"
+  impersonate: chrome
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: template('https://sspai.com/post/{id}')

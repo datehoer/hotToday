@@ -1,0 +1,17 @@
+key: zongheng
+name: 纵横中文网
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_zongheng_data
+
+extract:
+  list: resultList
+  fields:
+    title: bookName
+    url: template('https://www.zongheng.com/detail/{bookId}')

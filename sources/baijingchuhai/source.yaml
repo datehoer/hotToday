@@ -1,0 +1,17 @@
+key: baijingchuhai
+name: 白鲸出海
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_baijingchuhai_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

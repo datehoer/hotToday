@@ -1,0 +1,20 @@
+key: juejin_hot
+name: 掘金热榜
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 4
+proxy: none
+
+fetch:
+  type: json
+  url: https://api.juejin.cn/content_api/v1/content/article_rank?category_id=1&type=hot
+  headers:
+    User-Agent: "{ua.desktop}"
+  impersonate: chrome
+
+extract:
+  list: $
+  fields:
+    title: content.title
+    url: template('https://juejin.cn/post/{content.content_id}')

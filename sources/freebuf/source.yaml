@@ -1,0 +1,18 @@
+key: freebuf
+name: FreeBuf
+enabled: false
+disabled_reason: WAF 返回 405，已由安全内参和 The Hacker News 替代
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_freebuf_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

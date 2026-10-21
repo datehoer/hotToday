@@ -1,0 +1,17 @@
+key: taipingyang
+name: 太平洋汽车
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_taipingyang_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

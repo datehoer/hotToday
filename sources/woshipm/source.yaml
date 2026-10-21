@@ -1,0 +1,17 @@
+key: woshipm
+name: 人人都是产品经理
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_woshipm_data
+
+extract:
+  list: $
+  fields:
+    title: data.articleTitle
+    url: template('https://www.woshipm.com/{data.type}/{data.id}.html') ?? template('https://www.woshipm.com/{data.id}.html')

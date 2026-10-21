@@ -1,0 +1,17 @@
+key: weibo_hot_search
+name: 微博热搜
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_weibo_data
+
+extract:
+  list: realtime
+  fields:
+    title: word
+    url: url ?? template('https://s.weibo.com/weibo?q={word|quote}')

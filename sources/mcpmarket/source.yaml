@@ -1,0 +1,18 @@
+key: mcpmarket
+name: MCP Market
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_mcpmarket_data
+
+extract:
+  list: $
+  fields:
+    title: name
+    url: url
+    heat: stars

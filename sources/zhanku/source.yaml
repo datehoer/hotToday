@@ -1,0 +1,17 @@
+key: zhanku
+name: 站酷
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_zhanku_data
+
+extract:
+  list: $
+  fields:
+    title: rankingTitle
+    url: pageUrl

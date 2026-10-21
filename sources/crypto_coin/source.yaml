@@ -1,0 +1,18 @@
+key: crypto_coin
+name: 加密货币
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_crypto_price
+
+extract:
+  list: $
+  fields:
+    title: title | regex('^([\s\S]*?)(?:\s+\$[\d,]+(?:\.\d+)?%?)?\s*$')
+    url: url
+    heat: hotScore

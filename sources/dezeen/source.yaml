@@ -1,0 +1,17 @@
+key: dezeen
+name: Dezeen
+enabled: true
+schedule: hourly
+timeout: 25s
+retries: 0
+proxy: none
+
+fetch:
+  type: rss
+  url: https://www.dezeen.com/feed/
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url

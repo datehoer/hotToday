@@ -1,0 +1,18 @@
+key: douban_movie
+name: 豆瓣电影
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_douban_movie_data
+
+extract:
+  list: $[*].data
+  fields:
+    title: title
+    url: url
+    heat: hotScore

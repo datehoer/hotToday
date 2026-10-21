@@ -104,6 +104,20 @@ todo:
 
 ---
 
+## 源插件 (sources/)
+
+每个源是 `sources/<key>/` 一个目录，`key` 就是 hot-rank-web 读的源表名。目录里的 `source.yaml` 写名称、是否启用、超时、重试、代理、怎么抓（`fetch`）和怎么提取（`extract`），字段说明在 `plugins.py` 开头。
+
+- 接口和 RSS 源只要一个 `source.yaml`（`fetch.type: json` 或 `rss`）；要写代码的源用 `fetch.type: python`，`entry: spider:<函数>` 指向同目录的 `spider.py`
+- 停用一个源：`enabled: false`，并写 `disabled_reason`
+- 新源第一次写入时自动建表，清洗也按 `extract` 提取，不用再改 `task.py` 或别的文件
+- 校验：`python task.py --check`；只抓不写库：`python task.py --only <key> …`；当前生效的源、代理和 AI 修复设置（JSON，运维页的「配置」读它）：`python task.py --config`
+- `proxy: subpool` 走 `config.PROXIES` 里的 subpool 代理池（`/srv/projects/subpool`，systemd 服务 `subpool`，自带看门狗），运维页「状态」能看到它的节点和探测结果
+
+## AI 修复 (repair.py)
+
+每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上这类记为运维处理；用代理或浏览器的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 `HOT_REPAIR_DAILY` 个，默认 4）。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，也能撤销。命令见 `repair.py` 开头。
+
 ## 清洗链路 (ETL)
 
 爬虫每小时整点运行 `task.py`，完成后自动执行增量清洗 + 向量化：
@@ -111,7 +125,7 @@ todo:
 1. `etl/incremental.py` - 从 82 张源表按 checkpoint 水位线增量提取，upsert 到 `hot_topic` 汇总表
 2. `etl/embedding_backfill.py` - 对 `hot_topic` 中 `embedding IS NULL` 的行调用 text-embedding-3-small 批量向量化（幂等断点续跑）
 3. `etl/backfill.py` - 历史回填工具（手动运行）
-4. `etl/extractors.py` - 各源表数据解析（title/url/hot_value）
+4. `plugins.py` - 按各源 `source.yaml` 里的 `extract` 解析（title/url/hot_value）
 
 ### 新环境部署
 

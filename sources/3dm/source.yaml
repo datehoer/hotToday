@@ -1,0 +1,17 @@
+key: "3dm"
+name: "3DM"
+enabled: true
+schedule: hourly
+timeout: 5m
+retries: 0
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_3dm_data
+
+extract:
+  list: $
+  fields:
+    title: title
+    url: url
