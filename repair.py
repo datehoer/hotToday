@@ -5,7 +5,7 @@
   1. 进行中的任务: 应用后连续 2 轮正常 → 已恢复; 没等到修复源自己好了 → 自行恢复
   2. 最近两轮都失败 (或条数都偏低) 的源开任务, 一段连续失败只开一个; 任务因为模型接口出错、超时或中断而失败的,
      下一轮重开, 最多 RETRIES 次。按错误文本分流:
-     代理、超时、连不上、5xx、403/429 是运维问题, 不调模型; 浏览器类和用代理的源交给人;
+     代理、超时、连不上、5xx、403/429 是运维问题, 不调模型; 浏览器类的源交给人;
      其余 (返回空、解析出错、条数偏低) 交给模型, 24 小时内最多 daily 个
   3. 模型只有六个工具: 读本源目录的文件、看试抓时的 HTTP 响应、抓一个公网 https 地址、用 Chrome 打开一个公网页面
      (渲染后的 DOM 和页面发出的接口请求, 沙箱防火墙开着才能用)、提交补丁 (平台在沙箱里试抓并检查, 最多 3 次)、
@@ -13,7 +13,8 @@
 模型、接口地址、限额和系统提示词存在 ops.setting (name = 'repair'), 运维页「配置 → AI 修复」可改, 每轮和每个命令开始时读一次;
 密钥在仓库的 .env (HOT_REPAIR_KEY, 没有就用 HOT_EMBED_KEY), 运维页也能改, 每次调模型时读。
 沙箱: 试抓跑的是模型写的代码, 所以用 nobody 用户、干净的环境变量、只放了本源目录和 plugins.py 的临时目录,
-读不到 config.py、仓库和容器的环境变量。批准前人要看 diff: 检查只能拦住明显的越界, 拦不住所有恶意代码。
+读不到 config.py、仓库和容器的环境变量; 用代理的源走 SANDBOX_PROXY, 沙箱里没有代理账号。
+批准前人要看 diff: 检查只能拦住明显的越界, 拦不住所有恶意代码。
 
 在容器里跑:
   python repair.py run <key>              手动让 AI 分析一个源 (要 root: 沙箱要切到 nobody)
@@ -69,6 +70,9 @@ RANGES = {"daily": (0, 48, "每天最多几个任务"), "max_turns": (4, 60, "�
 S = dict(DEFAULTS)  # 当前生效的设置, load_settings() 更新
 VERIFY_SECONDS = 40  # 批准后立即跑一次的上限: 运维页的请求 60 秒就断
 RENDER_SECONDS = 75  # render_url 一次的上限: 打开页面 30 秒、等网络空闲 15 秒, 再读响应
+# 用代理的源试抓时走 subpool 的第二个监听 (subpool.conf 的 l= 行): 只在本机、不要密码, 沙箱里拿不到代理账号;
+# 沙箱防火墙给 nobody 只开了这一个本机端口
+SANDBOX_PROXY = "http://127.0.0.1:6699"
 ACTIVE = ["analyzing", "awaiting_review", "observing"]
 RETRIES = 2  # 失败 (failed) 的任务下一轮重开, 一段连续失败最多重开几次
 NOBODY = 65534
@@ -196,7 +200,7 @@ CHILD = r'''
 import ipaddress, json, socket, sys, time, traceback
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
-root, key = sys.argv[1], sys.argv[2]
+root, key, proxy = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, root)
 captures = []
 
@@ -217,8 +221,10 @@ def wrap(cls):
                "url": urljoin(str(getattr(self, "base_url", None) or ""), url)}
         if len(captures) < 10:
             captures.append(rec)
-        if not public(rec["url"]) or any(kwargs.get(k) or getattr(self, k, None) for k in ("proxies", "proxy")):
-            rec["error"] = "沙箱里只能访问公网地址, 不能用代理"
+        used = (kwargs.get("proxies"), kwargs.get("proxy"), getattr(self, "proxies", None), getattr(self, "proxy", None))
+        used = [u for v in used if v for u in (v.values() if isinstance(v, dict) else [v]) if u]
+        if not public(rec["url"]) or any(str(u) != proxy for u in used):
+            rec["error"] = "沙箱里只能访问公网地址, 代理只能用源的 proxy 参数给的那个"
             raise ConnectionError(rec["error"])
         try:
             res = orig(self, *args, **kwargs)
@@ -252,7 +258,7 @@ _urlopen = plugins.urlopen  # rss 类型用 urllib 抓, 也只放行公网地址
 
 def urlopen(request, *args, **kwargs):
     if not public(getattr(request, "full_url", request)):
-        raise ConnectionError("沙箱里只能访问公网地址, 不能用代理")
+        raise ConnectionError("沙箱里只能访问公网地址")
     res = _urlopen(request, *args, **kwargs)
     if not public(res.geturl()):
         res.close()
@@ -512,8 +518,8 @@ def unsupported(spec):
     lack = plugins.missing(spec)
     if lack:
         return f"镜像缺依赖 ({', '.join(lack)}), 要重建镜像"
-    if spec["proxy"] != "none":
-        return "用代理的源先不交给 AI (试抓要把代理账号放进沙箱)"
+    if spec["proxy"] not in ("none", "subpool"):
+        return f"用 {spec['proxy']} 代理的源先不交给 AI (沙箱里只有 subpool)"
     if spec["requires"]["bin"] and not walled():
         # 沙箱只拦得住 Python 发出的请求, 别的程序联网只有防火墙管得住
         return f"要用 {', '.join(spec['requires']['bin'])} 的源要先开沙箱防火墙 (hottoday-sandbox-net) 才交给 AI"
@@ -548,7 +554,7 @@ def _limits():
 
 def dry_run(key, files, keep_env=()):
     """用这些文件 ({文件名: 内容}) 在沙箱里抓一次: nobody 用户、干净的环境变量 (只多 keep_env 里这几个,
-    requires.env 不许是密钥), 临时目录里只有 plugins.py、一个只有空 PROXIES 的 config.py 和整个源目录
+    requires.env 不许是密钥), 临时目录里只有 plugins.py、一个只有沙箱代理 (SANDBOX_PROXY) 的 config.py 和整个源目录
     (子目录和别的文件也在, files 盖在上面)"""
     root = tempfile.mkdtemp(prefix=f"repair-{key}-")
     try:
@@ -557,7 +563,7 @@ def dry_run(key, files, keep_env=()):
                         ignore=shutil.ignore_patterns("__pycache__", "node_modules", ".*"))
         shutil.copy(plugins.__file__, os.path.join(root, "plugins.py"))
         with open(os.path.join(root, "config.py"), "w") as f:
-            f.write("PROXIES = {}\n")
+            f.write(f"PROXIES = {{'subpool': {SANDBOX_PROXY!r}}}\n")
         for name, text in files.items():
             with open(os.path.join(folder, name), "w", encoding="utf-8", newline="") as f:
                 f.write(text)
@@ -570,7 +576,7 @@ def dry_run(key, files, keep_env=()):
         os.chown(home, NOBODY, NOBODY)
         env = {name: os.environ[name] for name in keep_env if name in os.environ}
         env |= {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": home, "LANG": "C.UTF-8", "TZ": "Asia/Shanghai"}
-        proc = subprocess.Popen([sys.executable, "-I", "-B", "-c", CHILD, root, key], cwd=root, env=env,
+        proc = subprocess.Popen([sys.executable, "-I", "-B", "-c", CHILD, root, key, SANDBOX_PROXY], cwd=root, env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, user=NOBODY, group=NOBODY,
                                 extra_groups=[], preexec_fn=_limits, start_new_session=True)
         try:

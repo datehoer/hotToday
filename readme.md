@@ -119,9 +119,9 @@ todo:
 
 ## AI 修复 (repair.py)
 
-每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上、镜像缺依赖这类记为运维处理；用代理或浏览器的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 4 个），要用 node 这类外部程序的源只在沙箱防火墙开着时交给模型。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，并立即用新代码跑一次（成功就写进源表），也能撤销。模型、接口地址、限额和系统提示词存在 `ops.setting`，在运维页「配置 → AI 修复」改；密钥不进库，在 `.env`（`HOT_REPAIR_KEY`，没有就用 `HOT_EMBED_KEY`），运维页也能改，`repair.py` 每次调模型都重新读这个文件。命令见 `repair.py` 开头。
+每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上、镜像缺依赖这类记为运维处理；用浏览器的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 4 个），要用 node 这类外部程序的源只在沙箱防火墙开着时交给模型。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，并立即用新代码跑一次（成功就写进源表），也能撤销。模型、接口地址、限额和系统提示词存在 `ops.setting`，在运维页「配置 → AI 修复」改；密钥不进库，在 `.env`（`HOT_REPAIR_KEY`，没有就用 `HOT_EMBED_KEY`），运维页也能改，`repair.py` 每次调模型都重新读这个文件。命令见 `repair.py` 开头。
 
-沙箱防火墙：试抓和模型的 `render_url`（用 Chrome 打开页面，看渲染后的 DOM 和页面发出的接口请求；补丁里仍不能用浏览器）以 nobody（uid 65534）跑，雪球的 node 也降成 nobody。`/etc/hottoday-sandbox.nft`（开机由 systemd 服务 `hottoday-sandbox-net` 加载）让这个 uid 只能连公网，连本机（含公网 IP、docker 网桥）和内网立刻失败；只管这个 uid 自己发的包，别的进程不受影响。`repair.py` 每次先用 nobody 连一下 127.0.0.1，被防火墙拒绝才算开着；没开时要用 node 的源交给人，`render_url` 也用不了。
+沙箱防火墙：试抓和模型的 `render_url`（用 Chrome 打开页面，看渲染后的 DOM 和页面发出的接口请求；补丁里仍不能用浏览器）以 nobody（uid 65534）跑，雪球的 node 也降成 nobody。`/etc/hottoday-sandbox.nft`（开机由 systemd 服务 `hottoday-sandbox-net` 加载）让这个 uid 只能连公网，连本机（含公网 IP、docker 网桥）和内网立刻失败；只管这个 uid 自己发的包，别的进程不受影响。唯一的例外是 127.0.0.1:6699：subpool 的第二个监听（`subpool.conf` 里第二行 `l=`，只在本机、不要密码），用代理的源试抓时走它，沙箱里拿不到代理账号。`repair.py` 每次先用 nobody 连一下 127.0.0.1，被防火墙拒绝才算开着；没开时要用 node 的源交给人，`render_url` 也用不了。
 
 ## 运维中台 (ops/)
 
