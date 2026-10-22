@@ -1,15 +1,14 @@
 key: zhihu_hot_list
 name: 知乎热榜
-enabled: false
-disabled_reason: "2025-05-22 起停用"
+enabled: true
 schedule: hourly
 timeout: 30s
 retries: 4
-proxy: none
+proxy: subpool
 
 fetch:
   type: json
-  url: https://www.zhihu.com/api/v3/feed/topstory/hot-lists/total?limit=50&desktop=true
+  url: https://www.zhihu.com/api/v3/feed/topstory/hot-list-web?limit=50&desktop=true
   headers:
     User-Agent: "{ua.desktop}"
   impersonate: chrome
@@ -17,5 +16,6 @@ fetch:
 extract:
   list: $
   fields:
-    title: target.title
-    url: target.url
+    title: target.title_area.text ?? target.title
+    url: target.link.url ?? target.url
+    heat: target.metrics_area.text ?? detail_text
