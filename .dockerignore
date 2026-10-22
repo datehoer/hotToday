@@ -4,3 +4,7 @@ __pycache__
 *.log
 logs
 ops
+.env
+.env.*
+sources/xueqiu/waf/node_modules
+sources/xueqiu/waf/_work

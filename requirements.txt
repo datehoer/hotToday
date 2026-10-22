@@ -12,7 +12,7 @@ httpx==0.28.1
 idna==3.10
 loguru==0.7.2
 lxml==5.3.1
-patchright==1.60.1
+patchright==1.64.1
 psycopg2-binary==2.9.10
 pycparser==2.22
 pyquery==2.0.1

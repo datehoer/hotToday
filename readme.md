@@ -66,7 +66,7 @@ demo: [~~原网站~~](https://hotrank.datehoer.com/) => https://www.hotday.uk/
 - TapTap热门 (TapTap Hot Topics)
 - 腾讯新闻热点榜 (Tencent News Hot Rankings)
 - 人人都是产品经理热门 (Woshipm Hot Topics)
-- ~~雪球热门 (Xueqiu Hot Topics)~~
+- 雪球热帖 (Xueqiu Hot Topics)
 - 易车热门 (Yiche Hot Topics)
 - 优设读报 (Uisdc News)
 - 游戏陀螺文章推荐 (Youxituoluo Game News，原游戏葡萄 youxiputao 官网已停更迁移)

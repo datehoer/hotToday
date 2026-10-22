@@ -5,6 +5,10 @@ schedule: hourly
 timeout: 5m
 retries: 0
 proxy: none
+# 阿里云 WAF 的挑战用 node + jsdom 算 (waf/), jsdom 装在镜像里, WAF_NODE_PATH 指过去
+requires:
+  bin: [node]
+  env: [WAF_NODE_PATH]
 
 fetch:
   type: python

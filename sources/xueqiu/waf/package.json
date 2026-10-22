@@ -1,0 +1,9 @@
+{
+  "name": "xueqiu-waf-solver",
+  "private": true,
+  "version": "1.0.0",
+  "description": "雪球 aliyunwaf 挑战求解器依赖（jsdom）",
+  "dependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
