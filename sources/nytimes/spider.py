@@ -1,42 +1,25 @@
 from curl_cffi import requests
-import pyquery
-from urllib.parse import urljoin
+import xml.etree.ElementTree as ET
+
+RSS_URL = "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+
+
 def get_nytimes_data():
-    url = "https://www.nytimes.com/section/world"
+    """Fetch NYT World RSS and return the same list shape the extractor expects."""
     headers = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'priority': 'u=0, i',
-        'sec-ch-device-memory': '8',
-        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-        'sec-ch-ua-arch': '"x86"',
-        'sec-ch-ua-full-version-list': '"Google Chrome";v="131.0.6778.140", "Chromium";v="131.0.6778.140", "Not_A Brand";v="24.0.0.0"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-model': '""',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'same-origin',
-        'sec-fetch-user': '?1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        "User-Agent": "Mozilla/5.0 HotToday/1.0",
+        "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
     }
-    session = requests.Session()
-    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99")
+    res = requests.get(RSS_URL, headers=headers, timeout=30)
+    res.raise_for_status()
+    root = ET.fromstring(res.content)
     data = []
-    doc = pyquery.PyQuery(res.text)
-    items = doc("#stream-panel div>ol>li").items()
-    for item in items:
-        title = item.find("a").text()
-        if title == "":
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        if not title or not link:
             continue
-        link = urljoin(url, item.find("a").attr("href"))
-        hotScore = 0
-        data.append({
-            "title": title,
-            "url": link,
-            "hotScore": hotScore
-        })
-    return {"data": data}
+        data.append({"title": title, "url": link, "hotScore": 0})
+    if not data:
+        raise ValueError("RSS feed contains no valid entries")
+    return data
