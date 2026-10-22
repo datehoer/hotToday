@@ -54,25 +54,13 @@ export default async function Runs({
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4 sm:pl-6">开始</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">
-                  写入成功
-                </TableHead>
-                <TableHead className="pr-4 text-right sm:pr-3">
-                  没写入
-                </TableHead>
-                <TableHead className="hidden text-right lg:table-cell">
-                  抓取
-                </TableHead>
-                <TableHead className="hidden text-right lg:table-cell">
-                  清洗
-                </TableHead>
-                <TableHead className="hidden text-right lg:table-cell">
-                  向量化
-                </TableHead>
-                <TableHead className="hidden text-right md:table-cell">
-                  新增标题
-                </TableHead>
-                <TableHead className="hidden pr-4 text-right sm:table-cell sm:pr-6">
+                <TableHead className="hidden sm:table-cell">写入成功</TableHead>
+                <TableHead className="pr-4 sm:pr-3">没写入</TableHead>
+                <TableHead className="hidden lg:table-cell">抓取</TableHead>
+                <TableHead className="hidden lg:table-cell">清洗</TableHead>
+                <TableHead className="hidden lg:table-cell">向量化</TableHead>
+                <TableHead className="hidden md:table-cell">新增标题</TableHead>
+                <TableHead className="hidden pr-4 sm:table-cell sm:pr-6">
                   用时
                 </TableHead>
               </TableRow>
@@ -91,31 +79,31 @@ export default async function Runs({
                   <TableCell>
                     <PhaseBadge round={r} />
                   </TableCell>
-                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
+                  <TableCell className="hidden tabular-nums sm:table-cell">
                     {r.ok}{" "}
                     <span className="text-muted-foreground">/ {r.sources}</span>
                   </TableCell>
                   <TableCell
                     className={cn(
-                      "pr-4 text-right tabular-nums sm:pr-3",
+                      "pr-4 tabular-nums sm:pr-3",
                       r.failed > 0 && "text-destructive"
                     )}
                   >
                     {r.failed}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums lg:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                     {fmtMs(r.crawl_ms)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums lg:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                     {fmtMs(r.etl_ms)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums lg:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                     {fmtMs(r.embed_ms)}
                   </TableCell>
-                  <TableCell className="hidden text-right tabular-nums md:table-cell">
+                  <TableCell className="hidden tabular-nums md:table-cell">
                     {fmtNum(r.new_titles)}
                   </TableCell>
-                  <TableCell className="hidden pr-4 text-right tabular-nums sm:table-cell sm:pr-6">
+                  <TableCell className="hidden pr-4 tabular-nums sm:table-cell sm:pr-6">
                     {r.finished_at != null
                       ? fmtMs((r.finished_at - r.started_at) * 1000)
                       : "—"}

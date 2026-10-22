@@ -8,7 +8,8 @@
      其余 (返回空、解析出错、条数偏低) 交给模型, 24 小时内最多 daily 个
   3. 模型只有五个工具: 读本源目录的文件、看试抓时的 HTTP 响应、抓一个公网 https 地址、提交补丁 (平台在沙箱里试抓并检查, 最多 3 次)、
      结束并给出诊断。检查全部通过才进「待 review」, 人在运维页批准后写入 sources/<key>/, 并立即用新代码跑一次
-模型、限额和系统提示词存在 ops.setting (name = 'repair'), 运维页「配置 → AI 修复」可改, 每轮和每个命令开始时读一次。
+模型、接口地址、限额和系统提示词存在 ops.setting (name = 'repair'), 运维页「配置 → AI 修复」可改, 每轮和每个命令开始时读一次;
+密钥在仓库的 .env (HOT_REPAIR_KEY, 没有就用 HOT_EMBED_KEY), 运维页也能改, 每次调模型时读。
 沙箱: 试抓跑的是模型写的代码, 所以用 nobody 用户、干净的环境变量、只放了本源目录和 plugins.py 的临时目录,
 读不到 config.py、仓库和容器的环境变量。批准前人要看 diff: 检查只能拦住明显的越界, 拦不住所有恶意代码。
 
@@ -47,12 +48,14 @@ from psycopg2.extras import Json
 import plugins
 from plugins import redact
 
-API_URL = "https://api.hotday.uk/v1/chat/completions"
-API_KEY = os.getenv("HOT_REPAIR_KEY") or os.getenv("HOT_EMBED_KEY", "")  # 密钥不进库; 默认和向量化共用一个
+# 密钥不进库: 在仓库的 .env (也是容器的 env_file) 里, HOT_REPAIR_KEY, 没有就和向量化共用 HOT_EMBED_KEY
+ENV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 # 运维页能改的设置 (ops.setting 里 name = 'repair' 那行), 没改过的用这里的默认值; system 为 None 时用下面的 SYSTEM。
+# api_base 是 OpenAI 兼容接口的地址 (拼上 /chat/completions、/models)。
 # api.hotday.uk 这个分组里的 claude 渠道处理不了工具结果 (2026-10-21 实测), deepseek-v4-pro 可以
-DEFAULTS = {"model": "deepseek-v4-pro", "daily": 4, "max_turns": 30, "max_patches": 3, "max_fetches": 6,
-            "max_tokens": 600_000, "task_minutes": 15, "dry_run_seconds": 120, "system": None}
+DEFAULTS = {"model": "deepseek-v4-pro", "api_base": "https://api.hotday.uk/v1", "daily": 4, "max_turns": 30,
+            "max_patches": 3, "max_fetches": 6, "max_tokens": 600_000, "task_minutes": 15, "dry_run_seconds": 120,
+            "system": None}
 # 能填的范围和名字 (运维页的表单也用这些名字)。daily: 24 小时内最多几个调模型的任务 (手动的也算), 满了就不再自动开,
 # 0 就是不自动分析; 其余是每个任务的上限
 RANGES = {"daily": (0, 48, "每天最多几个任务"), "max_turns": (4, 60, "每个任务最多回合"),
@@ -290,6 +293,10 @@ def save_settings(cur, new, by):
     if not re.fullmatch(r"[\w.:/-]{1,80}", str(new.get("model") or "")):
         return "模型名只能有字母、数字和 . _ : / -"
     value["model"] = str(new["model"])
+    base = str(new.get("api_base") or "").strip().rstrip("/")
+    if not re.fullmatch(r"https?://[\w.-]+(:\d+)?(/[\w.~%-]+)*", base) or len(base) > 200:
+        return "接口地址要是 http(s) 地址, 比如 https://api.hotday.uk/v1"
+    value["api_base"] = base
     system = str(new.get("system") or "").replace("\r\n", "\n").strip()
     if len(system) > 20000:
         return "系统提示词太长 (最多 2 万字)"
@@ -844,11 +851,12 @@ def settings(cur):
     system 是没替换占位符的模板, 运维页编辑的就是它"""
     cur.execute("SELECT updated_at, updated_by FROM ops.setting WHERE name = 'repair'")
     updated = cur.fetchone() or (None, None)
+    models, models_error = list_models()
     return S | {
         "system": S["system"] or SYSTEM.strip(), "custom_system": S["system"] is not None,
         "defaults": DEFAULTS | {"system": SYSTEM.strip()}, "ranges": RANGES,
-        "updated_at": updated[0], "updated_by": updated[1], "api_url": API_URL,
-        "key": "HOT_REPAIR_KEY" if os.getenv("HOT_REPAIR_KEY") else "HOT_EMBED_KEY" if API_KEY else None,
+        "updated_at": updated[0], "updated_by": updated[1],
+        "key": api_key()[0], "models": models, "models_error": models_error,
         "doc": plugins.__doc__.strip(),
         "final": FINAL,
         "tools": [{"name": t["function"]["name"], "description": t["function"]["description"]} for t in TOOLS],
@@ -857,12 +865,35 @@ def settings(cur):
     }
 
 
+def api_key():
+    """(变量名, 密钥), 没有就是 (None, "")。每次都读 .env 文件: 运维页改了密钥马上生效,
+    容器的环境变量只在创建容器时读一次; 读不到文件才用环境变量"""
+    try:
+        with open(ENV_FILE, encoding="utf-8") as f:
+            env = {k.strip(): v.strip().strip("'\"") for k, sep, v in (line.partition("=") for line in f) if sep}
+    except OSError:
+        env = os.environ
+    return next(((name, env[name]) for name in ("HOT_REPAIR_KEY", "HOT_EMBED_KEY") if env.get(name)), (None, ""))
+
+
+def list_models():
+    """接口上的模型 (GET {api_base}/models), 配置页的下拉框用: (按名字排好的 id, 出错说明)"""
+    try:
+        res = requests.get(f"{S['api_base']}/models", headers={"Authorization": f"Bearer {api_key()[1]}"}, timeout=8)
+        if res.status_code != 200:
+            return [], f"HTTP {res.status_code}"
+        return sorted({m["id"] for m in res.json()["data"]}, key=str.lower), None
+    except Exception as err:
+        return [], redact(f"{type(err).__name__}: {err}", 200)
+
+
 def chat(messages, tools=True):
     body = {"model": S["model"], "messages": messages, "max_tokens": 8000} | ({"tools": TOOLS} if tools else {})
+    url, key = f"{S['api_base']}/chat/completions", api_key()[1]
     error = None
     for attempt in range(3):
         try:
-            res = requests.post(API_URL, headers={"Authorization": f"Bearer {API_KEY}"}, timeout=240, json=body)
+            res = requests.post(url, headers={"Authorization": f"Bearer {key}"}, timeout=240, json=body)
         except Exception as err:
             error = f"{type(err).__name__}: {err}"
         else:

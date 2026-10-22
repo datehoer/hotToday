@@ -8,8 +8,15 @@ import {
 } from "@remixicon/react"
 import Link from "next/link"
 
-import { AutoRefresh, RoundBars } from "@/components/ops-client"
-import { PageHeader, PageTitle, RoundParts, RoundStats } from "@/components/ops"
+import { AutoRefresh, RoundBars, StackBars } from "@/components/ops-client"
+import {
+  BarList,
+  PageHeader,
+  PageTitle,
+  RoundParts,
+  RoundStats,
+  STAGES,
+} from "@/components/ops"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -21,10 +28,11 @@ import {
 import { Separator } from "@/components/ui/separator"
 import {
   cause,
+  getActiveRepairs,
   getBoard,
-  getOpenRepairs,
   phase,
   REPAIR_STATE,
+  type Repair,
   type Source,
 } from "@/lib/ops"
 import { fmtHour, fmtMs, fmtSince, fmtTime } from "@/lib/utils"
@@ -51,13 +59,18 @@ export default async function Overview() {
     (s) => s.run.status === "empty" || s.run.status === "error"
   )
   const low = sources.filter((s) => s.low)
-  const repairs = (await getOpenRepairs()).filter((r) =>
-    sources.some((s) => s.id === r.source)
-  )
+  // Open tasks and the ones that changed since the round before last (approved, recovered, …)
+  const repairs = (
+    await getActiveRepairs(rounds.at(-2)?.started_at ?? latest.started_at)
+  ).filter((r) => sources.some((s) => s.id === r.source))
   // A source is "new" when it wrote data in the round before this one.
   const isNew = (s: Source) => s.history.at(-2)?.status === "ok"
   const fresh = failing.filter(isNew)
   const groups = Map.groupBy(failing, (s) => cause(s.run)!)
+  const slowest = sources
+    .filter((s) => s.run.status !== "disabled" && s.run.ms != null)
+    .toSorted((a, b) => b.run.ms! - a.run.ms!)
+    .slice(0, 10)
   const prevOk = rounds.at(-2)
     ? sources.filter((s) => s.history.at(-2)?.status === "ok").length
     : null
@@ -117,13 +130,16 @@ export default async function Overview() {
           round={latest}
           runs={sources.map((s) => s.run)}
           prevOk={prevOk}
+          linked
         />
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_452px]">
           <Card>
             <CardHeader>
               <CardTitle>最近 {rounds.length} 轮没写入的源</CardTitle>
-              <CardDescription>每小时一轮，柱子越高坏的越多</CardDescription>
+              <CardDescription>
+                每小时一轮，柱子越高坏的越多；点柱子看那一轮
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
               <RoundBars
@@ -143,6 +159,7 @@ export default async function Overview() {
                     title: `${fmtTime(r.started_at)} 这一轮`,
                     value,
                     tone: i === rounds.length - 1 ? "bad" : undefined,
+                    href: `/runs/${r.started_at}`,
                   }
                 })}
               />
@@ -163,20 +180,27 @@ export default async function Overview() {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <RiRobot2Line className="size-4 text-primary" />
-                    <span className="flex-1 font-medium">AI 修复</span>
-                    <Badge>
-                      {
-                        repairs.filter((r) => r.state === "awaiting_review")
-                          .length
-                      }{" "}
-                      个待 review
-                    </Badge>
+                    <Link
+                      href="/repairs"
+                      className="flex-1 font-medium hover:underline"
+                    >
+                      AI 修复
+                    </Link>
+                    {repairs.some((r) => r.state === "awaiting_review") && (
+                      <Badge>
+                        {
+                          repairs.filter((r) => r.state === "awaiting_review")
+                            .length
+                        }{" "}
+                        个待 review
+                      </Badge>
+                    )}
                   </div>
                   {repairs.map((r) => (
                     <SourceLink
                       key={r.id}
                       s={sources.find((s) => s.id === r.source)!}
-                      note={REPAIR_STATE[r.state]}
+                      note={repairNote(r)}
                     />
                   ))}
                 </div>
@@ -244,10 +268,94 @@ export default async function Overview() {
           </Card>
         </div>
 
-        <RoundParts round={latest} runs={sources.map((s) => s.run)} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>每轮新增标题</CardTitle>
+              <CardDescription>
+                清洗后第一次出现的标题；点柱子看那一轮
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RoundBars
+                label="新增标题"
+                fade
+                data={rounds.map((r) => ({
+                  key: String(r.started_at),
+                  hour: fmtHour(r.started_at),
+                  title: `${fmtTime(r.started_at)} 这一轮`,
+                  value: r.new_titles ?? 0,
+                  href: `/runs/${r.started_at}`,
+                }))}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>每轮用时</CardTitle>
+              <CardDescription>
+                抓取、清洗、向量化各用了多久；点柱子看那一轮
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StackBars
+                parts={STAGES}
+                data={rounds.map((r) => ({
+                  key: String(r.started_at),
+                  hour: fmtHour(r.started_at),
+                  title: `${fmtTime(r.started_at)} 这一轮`,
+                  href: `/runs/${r.started_at}`,
+                  ...Object.fromEntries(
+                    STAGES.map((s) => [s.key, r[s.key] ?? 0])
+                  ),
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>这一轮最慢的 {slowest.length} 个源</CardTitle>
+              <CardDescription>
+                一个源最多跑 5 分钟（json 30 秒、rss 25 秒），慢的拖长整轮
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <BarList
+                format={fmtMs}
+                rows={slowest.map((s) => ({
+                  key: s.id,
+                  label: s.name,
+                  value: s.run.ms ?? 0,
+                  href: `/sources/${s.id}`,
+                  note: s.run.status === "ok" ? undefined : cause(s.run)!,
+                }))}
+              />
+            </CardContent>
+          </Card>
+          <RoundParts
+            round={latest}
+            runs={sources.map((s) => s.run)}
+            linked
+            stack
+          />
+        </div>
       </div>
     </>
   )
+}
+
+// What a task in the 需要处理 card is waiting for, or how it ended.
+function repairNote(r: Repair) {
+  if (r.state === "observing")
+    return r.verify?.status === "ok"
+      ? `观察中 · 批准后 ${r.verify.items} 条`
+      : r.verify
+        ? "观察中 · 批准后还是没写入"
+        : "观察中"
+  return REPAIR_STATE[r.state]
 }
 
 function SourceLink({ s, note }: { s: Source; note: string }) {

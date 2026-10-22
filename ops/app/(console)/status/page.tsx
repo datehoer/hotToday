@@ -1,5 +1,6 @@
 import { RiErrorWarningLine } from "@remixicon/react"
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { AutoRefresh, LoadMore } from "@/components/ops-client"
 import { Facts, PageHeader, PageTitle, PillNav, Stat } from "@/components/ops"
@@ -297,6 +298,11 @@ function ProxyCard({
   n: number
 }) {
   const { pool, watchdog, subscribe } = p
+  // Right after a start every node is still unchecked, so "no available node" waits for the checks.
+  const badSubs =
+    subscribe.sources?.filter(
+      (s) => s.error || (!s.available && pool.uptime_sec >= 30)
+    ).length ?? 0
   const probes = watchdog.probes
   // One slot per probe for the last 60, grey until the watchdog has run that long.
   const recent = probes.slice(-60)
@@ -336,14 +342,27 @@ function ProxyCard({
           rows={[
             [
               "订阅",
-              subscribe.error ? (
-                <span className="text-destructive">
-                  {fmtTime(Date.parse(subscribe.at) / 1000)} 加载失败：
-                  {subscribe.error}
-                </span>
-              ) : (
-                `${fmtTime(Date.parse(subscribe.at) / 1000)} 加载，${subscribe.nodes} 个节点；每小时刷新`
-              ),
+              <span key="v">
+                {subscribe.error ? (
+                  <span className="text-destructive">
+                    {fmtTime(Date.parse(subscribe.at) / 1000)} 加载失败：
+                    {subscribe.error}
+                  </span>
+                ) : (
+                  `${fmtTime(Date.parse(subscribe.at) / 1000)} 加载，${subscribe.nodes} 个节点；每小时刷新。`
+                )}
+                {badSubs > 0 && (
+                  <span className="text-destructive">
+                    {badSubs} 个订阅拉取失败或没有可用节点。
+                  </span>
+                )}
+                <Link
+                  href="/config?tab=subpool"
+                  className="ml-1 underline-offset-4 hover:underline"
+                >
+                  各个订阅
+                </Link>
+              </span>,
             ],
             [
               "看门狗",
@@ -420,8 +439,8 @@ function ProxyCard({
             <TableHead className="pl-4 sm:pl-6">地址</TableHead>
             <TableHead className="hidden sm:table-cell">协议</TableHead>
             <TableHead>状态</TableHead>
-            <TableHead className="text-right">延迟</TableHead>
-            <TableHead className="hidden pr-4 text-right sm:table-cell sm:pr-6">
+            <TableHead>延迟</TableHead>
+            <TableHead className="hidden pr-4 sm:table-cell sm:pr-6">
               连续失败
             </TableHead>
           </TableRow>
@@ -448,10 +467,10 @@ function ProxyCard({
                   <Badge variant="secondary">不可用</Badge>
                 )}
               </TableCell>
-              <TableCell className="text-right text-muted-foreground tabular-nums">
+              <TableCell className="text-muted-foreground tabular-nums">
                 {x.latency_ms ? ms(x.latency_ms) : "—"}
               </TableCell>
-              <TableCell className="hidden pr-4 text-right text-muted-foreground tabular-nums sm:table-cell sm:pr-6">
+              <TableCell className="hidden pr-4 text-muted-foreground tabular-nums sm:table-cell sm:pr-6">
                 {x.failures}
               </TableCell>
             </TableRow>

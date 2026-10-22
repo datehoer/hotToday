@@ -20,12 +20,13 @@ import {
 import {
   PageHeader,
   PageTitle,
+  RepairBadge,
+  RepairTimeline,
   STATUS,
   Stat,
   StatusBadge,
 } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -45,12 +46,12 @@ import {
 import {
   cause,
   getRepairs,
+  getRunsAfter,
   getSource,
   getSourceFiles,
   getSourceItems,
   getSourceRuns,
   isLow,
-  REPAIR_STATE,
   type Repair,
   type RepairState,
   type Run,
@@ -95,6 +96,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
     getRepairs(s.id),
     getSourceFiles(s.id),
   ])
+  const after = (await getRunsAfter(repairs.slice(0, 1))).get(repairs[0]?.id)
   const runs = runPage.slice(0, nRuns)
   const items = itemPage.slice(0, nItems)
   // Each list grows on its own; the other keeps its length in the link.
@@ -225,6 +227,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           <RepairCard
             source={s.id}
             repairs={repairs}
+            after={after}
             broken={failed(s.run) || s.low}
           />
         )}
@@ -269,7 +272,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
               <CardTitle>每轮条数</CardTitle>
               <CardDescription>
                 最近 {board.rounds.length}{" "}
-                轮，红色是没写入的轮次，橙色是条数偏低
+                轮，红色是没写入的轮次，橙色是条数偏低；点柱子看那一轮
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
@@ -282,6 +285,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                     hour: fmtHour(r.started_at),
                     title: `${fmtTime(r.started_at)} · ${h ? STATUS[h.status] : "没有记录"}`,
                     value: h?.items ?? 0,
+                    href: `/runs/${r.started_at}`,
                     tone:
                       !h || h.status === "disabled"
                         ? "muted"
@@ -346,10 +350,8 @@ export default async function SourceDetail({ params, searchParams }: Props) {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4 sm:pl-6">时间</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead className="text-right">条数</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">
-                  耗时
-                </TableHead>
+                <TableHead>条数</TableHead>
+                <TableHead className="hidden sm:table-cell">耗时</TableHead>
                 <TableHead className="hidden pr-4 sm:pr-6 md:table-cell">
                   说明
                 </TableHead>
@@ -369,10 +371,10 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                   <TableCell>
                     <StatusBadge run={r} low={isLow(r, s.usual)} />
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
+                  <TableCell className="font-medium tabular-nums">
                     {fmtNum(r.items)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
                     {fmtMs(r.ms)}
                   </TableCell>
                   <TableCell className="hidden w-full max-w-0 pr-4 sm:pr-6 md:table-cell">
@@ -436,34 +438,16 @@ export default async function SourceDetail({ params, searchParams }: Props) {
 
 const OPEN: RepairState[] = ["analyzing", "awaiting_review", "observing"]
 
-function RepairBadge({ state }: { state: RepairState }) {
-  const tone: Partial<Record<RepairState, string>> = {
-    awaiting_review: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-    resolved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  }
-  const variant =
-    state === "analyzing"
-      ? "default"
-      : state === "needs_human" || state === "failed"
-        ? "destructive"
-        : state === "observing" || state === "superseded"
-          ? "outline"
-          : "secondary"
-  return (
-    <Badge variant={variant} className={tone[state]}>
-      {REPAIR_STATE[state]}
-    </Badge>
-  )
-}
-
 /** The latest AI repair task for this source: diagnosis, checks, the sandbox run, the diff and what to do next. */
 function RepairCard({
   source,
   repairs,
+  after,
   broken,
 }: {
   source: string
   repairs: Repair[]
+  after?: Run[]
   broken: boolean
 }) {
   const [r, ...older] = repairs
@@ -536,6 +520,12 @@ function RepairCard({
           </p>
         )}
         {r?.verify && <VerifyRun verify={r.verify} />}
+        {r && (
+          <div className="flex flex-col gap-1.5">
+            <span className="font-medium">记录</span>
+            <RepairTimeline repair={r} after={after} />
+          </div>
+        )}
         {!!r?.evidence?.length && (
           <ul className="flex list-disc flex-col gap-1 pl-5 break-all text-muted-foreground">
             {r.evidence.map((e, i) => (

@@ -87,10 +87,8 @@ export default async function RoundDetail({ params }: Props) {
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4 sm:pl-6">源</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead className="text-right">条数</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">
-                  耗时
-                </TableHead>
+                <TableHead>条数</TableHead>
+                <TableHead className="hidden sm:table-cell">耗时</TableHead>
                 <TableHead className="hidden pr-4 sm:pr-6 md:table-cell">
                   说明
                 </TableHead>
@@ -113,10 +111,10 @@ export default async function RoundDetail({ params }: Props) {
                   <TableCell>
                     <StatusBadge run={r} />
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
+                  <TableCell className="font-medium tabular-nums">
                     {fmtNum(r.items)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
                     {fmtMs(r.ms)}
                   </TableCell>
                   <TableCell className="hidden w-full max-w-0 pr-4 sm:pr-6 md:table-cell">

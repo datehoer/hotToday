@@ -21,7 +21,14 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
-import { phase, type Round, type Run } from "@/lib/ops"
+import {
+  phase,
+  REPAIR_STATE,
+  type Repair,
+  type RepairState,
+  type Round,
+  type Run,
+} from "@/lib/ops"
 import { cn, fmtMs, fmtNum, fmtTime } from "@/lib/utils"
 
 export const STATUS = {
@@ -144,16 +151,32 @@ export function Stat({
   value,
   unit,
   note,
+  href,
 }: {
   label: React.ReactNode
   value: React.ReactNode
   unit?: string
   note?: React.ReactNode
+  href?: string // the whole card links there
 }) {
   return (
-    <Card size="sm">
+    <Card
+      size="sm"
+      className={cn(
+        href && "relative transition-colors has-[a:hover]:bg-muted/50"
+      )}
+    >
       <CardContent className="flex flex-col gap-1">
-        <span className="text-muted-foreground">{label}</span>
+        {href ? (
+          <Link
+            href={href}
+            className="text-muted-foreground after:absolute after:inset-0"
+          >
+            {label}
+          </Link>
+        ) : (
+          <span className="text-muted-foreground">{label}</span>
+        )}
         <span className="flex items-baseline gap-1.5">
           <span className="text-3xl font-semibold tabular-nums">{value}</span>
           {unit && <span className="text-muted-foreground">{unit}</span>}
@@ -270,33 +293,131 @@ export function PageTitle({
   )
 }
 
-/** Proportional bar with a legend, e.g. 状态分布 or the three steps of a round. */
+/** Proportional bar with a legend, e.g. 状态分布 or the three steps of a round; a part with an
+ * href links there from both its segment and its legend entry. */
 export function Segments({
   parts,
 }: {
-  parts: { label: string; value: number; className: string; text?: string }[]
+  parts: {
+    label: string
+    value: number
+    className: string
+    text?: string
+    href?: string
+  }[]
 }) {
   const shown = parts.filter((p) => p.value > 0)
   return (
     <div className="flex flex-col gap-3">
       <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
-        {shown.map((p) => (
-          <i
-            key={p.label}
-            className={p.className}
-            style={{ flexGrow: p.value }}
-          />
-        ))}
+        {shown.map((p) =>
+          p.href ? (
+            <Link
+              key={p.label}
+              href={p.href}
+              aria-label={p.text ?? `${p.label} ${p.value}`}
+              className={cn(p.className, "transition-opacity hover:opacity-75")}
+              style={{ flexGrow: p.value }}
+            />
+          ) : (
+            <i
+              key={p.label}
+              className={p.className}
+              style={{ flexGrow: p.value }}
+            />
+          )
+        )}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {parts.map((p) => (
-          <span key={p.label} className="inline-flex items-center gap-1.5">
-            <i className={cn("size-2 rounded-full", p.className)} />
-            {p.text ?? `${p.label} ${p.value}`}
-          </span>
-        ))}
+        {parts.map((p) => {
+          const body = (
+            <>
+              <i className={cn("size-2 rounded-full", p.className)} />
+              {p.text ?? `${p.label} ${p.value}`}
+            </>
+          )
+          return p.href ? (
+            <Link
+              key={p.label}
+              href={p.href}
+              className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline"
+            >
+              {body}
+            </Link>
+          ) : (
+            <span key={p.label} className="inline-flex items-center gap-1.5">
+              {body}
+            </span>
+          )
+        })}
       </div>
     </div>
+  )
+}
+
+/** The three steps of a round, as an ordinal ramp of the theme's blues: the first step has the most
+ * contrast with the card. Checked with the dataviz validator for both themes (the theme's lightest
+ * blue is too faint on white, its darkest too faint on the dark card). */
+export const STAGES = [
+  {
+    key: "crawl_ms",
+    label: "抓取",
+    light: "var(--chart-5)",
+    dark: "var(--chart-1)",
+    className: "bg-chart-5 dark:bg-chart-1",
+  },
+  {
+    key: "etl_ms",
+    label: "清洗",
+    light: "var(--chart-4)",
+    dark: "var(--chart-2)",
+    className: "bg-chart-4 dark:bg-chart-2",
+  },
+  {
+    key: "embed_ms",
+    label: "向量化",
+    light: "var(--chart-2)",
+    dark: "var(--chart-4)",
+    className: "bg-chart-2 dark:bg-chart-4",
+  },
+] as const
+
+/** Ranked rows with a proportional bar, each a link, e.g. the slowest sources of a round. */
+export function BarList({
+  rows,
+  format,
+}: {
+  rows: {
+    key: string
+    label: string
+    value: number
+    href: string
+    note?: string
+  }[]
+  format: (v: number) => string
+}) {
+  const max = Math.max(1, ...rows.map((r) => r.value))
+  return (
+    <ol className="flex flex-col">
+      {rows.map((r) => (
+        <li key={r.key}>
+          <Link
+            href={r.href}
+            className="-mx-2 grid h-8 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 hover:bg-muted"
+          >
+            <span className="truncate">{r.label}</span>
+            <i
+              className="h-2 min-w-1 rounded-r-[4px] bg-chart-3"
+              style={{ width: `${(r.value / max) * 100}%` }}
+            />
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {format(r.value)}
+              {r.note && ` · ${r.note}`}
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ol>
   )
 }
 
@@ -307,23 +428,28 @@ const tally = (runs: Pick<Run, "status">[]) => ({
   disabled: runs.filter((r) => r.status === "disabled").length,
 })
 
-/** The four numbers of one round (概况 and 运行详情). */
+/** The four numbers of one round (概况 and 运行详情); linked on 概况, where they open the
+ * matching source list or the round. */
 export function RoundStats({
   round,
   runs,
   prevOk,
+  linked,
 }: {
   round: Round
   runs: Pick<Run, "status">[]
   prevOk?: number | null
+  linked?: boolean
 }) {
   const n = tally(runs)
+  const at = linked ? `/runs/${round.started_at}` : undefined
   return (
     <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
       <Stat
         label="写入成功"
         value={n.ok}
         unit={`/ ${round.sources}`}
+        href={linked ? "/sources?f=ok" : undefined}
         note={
           prevOk == null
             ? undefined
@@ -336,35 +462,44 @@ export function RoundStats({
         label="没写入"
         value={n.error + n.empty}
         unit="个源"
+        href={linked ? "/sources?f=attention" : undefined}
         note={`${n.error} 个出错 · ${n.empty} 个返回空数据`}
       />
       <Stat
         label="新增标题"
         value={fmtNum(round.new_titles)}
         unit="条"
+        href={at}
         note={`清洗用时 ${fmtMs(round.etl_ms)}`}
       />
       <Stat
         label="向量化"
         value={fmtNum(round.embedded)}
         unit="条"
+        href={at}
         note={`失败 ${fmtNum(round.embed_failed)} · 用时 ${fmtMs(round.embed_ms)}`}
       />
     </div>
   )
 }
 
-/** Status split and step timings of one round. */
+/** Status split and step timings of one round; on 概况 (linked) the parts open the source list or
+ * the round, and stack (one column) to sit beside another card. */
 export function RoundParts({
   round,
   runs,
+  linked,
+  stack,
 }: {
   round: Round
   runs: Pick<Run, "status">[]
+  linked?: boolean
+  stack?: boolean
 }) {
   const n = tally(runs)
+  const to = (href: string) => (linked ? href : undefined)
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className={cn("grid gap-4", !stack && "lg:grid-cols-2")}>
       <Card size="sm">
         <CardHeader>
           <CardTitle>{runs.length} 个源</CardTitle>
@@ -373,17 +508,29 @@ export function RoundParts({
         <CardContent>
           <Segments
             parts={[
-              { label: "正常", value: n.ok, className: "bg-primary" },
-              { label: "出错", value: n.error, className: "bg-destructive" },
+              {
+                label: "正常",
+                value: n.ok,
+                className: "bg-primary",
+                href: to("/sources?f=ok"),
+              },
+              {
+                label: "出错",
+                value: n.error,
+                className: "bg-destructive",
+                href: to("/sources?f=attention"),
+              },
               {
                 label: "返回空数据",
                 value: n.empty,
                 className: "bg-amber-600",
+                href: to("/sources?f=attention"),
               },
               {
                 label: "已停用",
                 value: n.disabled,
                 className: "bg-muted-foreground/30",
+                href: to("/sources?f=disabled"),
               },
             ]}
           />
@@ -402,29 +549,101 @@ export function RoundParts({
         </CardHeader>
         <CardContent>
           <Segments
-            parts={[
-              {
-                label: "抓取",
-                value: round.crawl_ms ?? 0,
-                className: "bg-chart-4",
-                text: `抓取 ${fmtMs(round.crawl_ms)}`,
-              },
-              {
-                label: "清洗",
-                value: round.etl_ms ?? 0,
-                className: "bg-chart-2",
-                text: `清洗 ${fmtMs(round.etl_ms)}`,
-              },
-              {
-                label: "向量化",
-                value: round.embed_ms ?? 0,
-                className: "bg-chart-1",
-                text: `向量化 ${fmtMs(round.embed_ms)}`,
-              },
-            ]}
+            parts={STAGES.map((s) => ({
+              label: s.label,
+              value: round[s.key] ?? 0,
+              className: s.className,
+              text: `${s.label} ${fmtMs(round[s.key])}`,
+              href: to(`/runs/${round.started_at}`),
+            }))}
           />
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export function RepairBadge({ state }: { state: RepairState }) {
+  const tone: Partial<Record<RepairState, string>> = {
+    awaiting_review: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+    resolved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  }
+  const variant =
+    state === "analyzing"
+      ? "default"
+      : state === "needs_human" || state === "failed"
+        ? "destructive"
+        : state === "observing" || state === "superseded"
+          ? "outline"
+          : "secondary"
+  return (
+    <Badge variant={variant} className={tone[state]}>
+      {REPAIR_STATE[state]}
+    </Badge>
+  )
+}
+
+const WHO: Record<string, string> = {
+  system: "系统",
+  agent: "AI",
+  test: "测试",
+}
+
+/** What happened to a repair task, oldest first: its state changes (who and why), the run right after
+ * approval and the first two rounds after the patch went live. */
+export function RepairTimeline({
+  repair: r,
+  after = [],
+}: {
+  repair: Repair
+  after?: Run[]
+}) {
+  const v = r.verify
+  const events = [
+    ...r.log.map((l) => ({
+      ts: l.ts,
+      who: WHO[l.by] ?? l.by,
+      text: REPAIR_STATE[l.to] + (l.note ? `：${l.note}` : ""),
+      bad: l.to === "failed" || l.to === "needs_human",
+    })),
+    ...(v
+      ? [
+          {
+            ts: v.ts,
+            who: "运行",
+            text:
+              v.status === "ok"
+                ? `批准后用新代码跑了一次：${v.items} 条，已写入${v.cleaned ? "并清洗" : `，清洗出错：${v.etl_error}`}`
+                : `批准后用新代码跑了一次：${v.status === "empty" ? "返回空数据" : `出错：${v.error}`}，没写入`,
+            bad: v.status !== "ok",
+          },
+        ]
+      : []),
+    ...after.map((u) => ({
+      ts: u.finished_at,
+      who: "整点",
+      text: `${fmtTime(u.round_at)} 这一轮${STATUS[u.status]}${u.items != null ? `，${u.items} 条` : ""}${u.error ? `：${u.error}` : ""}`,
+      bad: u.status === "empty" || u.status === "error",
+    })),
+  ].sort((a, b) => a.ts - b.ts)
+  return (
+    <ol className="flex flex-col gap-1 text-xs">
+      {events.map((e, i) => (
+        <li key={i} className="flex gap-2">
+          <span className="w-24 shrink-0 text-muted-foreground tabular-nums">
+            {fmtTime(e.ts)}
+          </span>
+          <span className="w-8 shrink-0 text-muted-foreground">{e.who}</span>
+          <span
+            className={cn(
+              "min-w-0 [overflow-wrap:anywhere]",
+              e.bad && "text-destructive"
+            )}
+          >
+            {e.text}
+          </span>
+        </li>
+      ))}
+    </ol>
   )
 }

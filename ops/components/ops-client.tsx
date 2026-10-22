@@ -7,6 +7,7 @@ import {
   RiHistoryLine,
   RiLogoutBoxRLine,
   RiPulseLine,
+  RiRobot2Line,
   RiSettings3Line,
 } from "@remixicon/react"
 import Link, { useLinkStatus } from "next/link"
@@ -19,9 +20,23 @@ import {
   useState,
   useTransition,
 } from "react"
-import { Bar, BarChart, Cell, LabelList, XAxis } from "recharts"
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Rectangle,
+  XAxis,
+  YAxis,
+  type BarShapeProps,
+} from "recharts"
 
-import { saveRepairSettings, saveSubpool } from "@/app/(console)/config/actions"
+import {
+  editSubscription,
+  saveRepairSettings,
+  saveSubpool,
+} from "@/app/(console)/config/actions"
 import { repairAction } from "@/app/(console)/sources/[id]/actions"
 import { login, logout } from "@/app/login/actions"
 import {
@@ -34,6 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -44,6 +60,8 @@ import {
 } from "@/components/ui/card"
 import {
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
@@ -64,6 +82,14 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Spinner } from "@/components/ui/spinner"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import type {
   RepairLimit,
@@ -72,7 +98,7 @@ import type {
   SUBPOOL_STRATEGIES,
   SubpoolKey,
 } from "@/lib/ops"
-import { cn, fmtTime } from "@/lib/utils"
+import { cn, fmtMs, fmtTime } from "@/lib/utils"
 
 export type RoundBrief = {
   label: string
@@ -86,6 +112,7 @@ const NAV = [
   { href: "/", label: "概况", icon: RiDashboardLine },
   { href: "/sources", label: "源", icon: RiDatabase2Line },
   { href: "/runs", label: "运行", icon: RiHistoryLine },
+  { href: "/repairs", label: "AI 修复", icon: RiRobot2Line },
   { href: "/status", label: "状态", icon: RiPulseLine },
   { href: "/config", label: "配置", icon: RiSettings3Line },
 ]
@@ -189,6 +216,7 @@ export type BarDatum = {
   title: string
   value: number
   tone?: "bad" | "low" | "muted"
+  href?: string // where a click on this round's column goes
 }
 
 const TONES = {
@@ -197,7 +225,31 @@ const TONES = {
   muted: "var(--muted-foreground)",
 }
 
-/** Bar per round with the value on top; the tooltip shows the round's full time. */
+// Values are labelled selectively: the newest column, and the highest one when it is far enough
+// from it not to collide; the axis and the tooltip carry the rest.
+const pickLabels = <T,>(data: T[], value: (d: T) => number) => {
+  const max = Math.max(...data.map(value))
+  const top = data.findLastIndex((d) => value(d) === max)
+  return (i: number) =>
+    i === data.length - 1 || (i === top && max > 0 && data.length - 1 - top > 2)
+}
+
+// Axis ticks: 0 / 500 / 1K / 1.5K
+const compact = (v: number) =>
+  v >= 1000 ? `${+(v / 1000).toFixed(1)}K` : String(v)
+
+/** A click anywhere in a column's band (not just on the bar) opens its href. */
+function useColumnClick(data: { href?: string }[]) {
+  const router = useRouter()
+  return data.some((d) => d.href)
+    ? (state: { activeIndex?: number | string | null }) => {
+        const href = data[Number(state.activeIndex)]?.href
+        if (state.activeIndex != null && href) router.push(href)
+      }
+    : undefined
+}
+
+/** Bar per round; the tooltip shows the round's full time. fade: every round but the newest faded. */
 export function RoundBars({
   data,
   label,
@@ -209,16 +261,26 @@ export function RoundBars({
   color?: string
   fade?: boolean
 }) {
+  const onClick = useColumnClick(data)
+  const shown = pickLabels(data, (d) => d.value)
   return (
     <ChartContainer
       config={{ value: { label, color } }}
-      className="aspect-auto h-[200px] w-full lg:h-full lg:min-h-[200px]"
+      className={cn(
+        "aspect-auto h-[200px] w-full lg:h-full lg:min-h-[200px]",
+        onClick && "cursor-pointer"
+      )}
     >
       <BarChart
-        data={data}
-        margin={{ top: 18, left: 0, right: 0 }}
+        data={data.map((d, i) => ({
+          ...d,
+          label: shown(i) ? d.value.toLocaleString("en-US") : "",
+        }))}
+        margin={{ top: 18, left: 0, right: 14 }}
         accessibilityLayer
+        onClick={onClick}
       >
+        <CartesianGrid vertical={false} />
         <XAxis
           dataKey="hour"
           tickLine={false}
@@ -227,32 +289,213 @@ export function RoundBars({
           interval={0}
           fontSize={11}
         />
+        <YAxis
+          width={36}
+          tickLine={false}
+          axisLine={false}
+          allowDecimals={false}
+          tickCount={4}
+          fontSize={11}
+          tickFormatter={compact}
+        />
         <ChartTooltip
           cursor={false}
           content={
             <ChartTooltipContent
               labelFormatter={(_, p) => p[0]?.payload.title}
+              formatter={(value) => (
+                <TooltipRow
+                  label={label}
+                  value={Number(value).toLocaleString("en-US")}
+                />
+              )}
             />
           }
         />
-        <Bar dataKey="value" radius={[6, 6, 0, 0]} minPointSize={3}>
-          {data.map((d) => (
+        <Bar
+          dataKey="value"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={24}
+          minPointSize={3}
+        >
+          {data.map((d, i) => (
             <Cell
               key={d.key}
               fill={d.tone ? TONES[d.tone] : "var(--color-value)"}
               fillOpacity={
-                d.tone === "muted" ? 0.3 : fade && !d.tone ? 0.45 : 0.85
+                d.tone === "muted"
+                  ? 0.3
+                  : fade && !d.tone && i < data.length - 1
+                    ? 0.45
+                    : 0.85
               }
             />
           ))}
           <LabelList
-            dataKey="value"
+            dataKey="label"
             position="top"
             offset={6}
             className="fill-muted-foreground tabular-nums"
             fontSize={11}
           />
         </Bar>
+      </BarChart>
+    </ChartContainer>
+  )
+}
+
+function TooltipRow({
+  label,
+  value,
+  color,
+}: {
+  label: string
+  value: string
+  color?: string
+}) {
+  return (
+    <div className="flex w-full items-center gap-2">
+      {color && (
+        <i
+          className="h-2.5 w-1 shrink-0 rounded-[2px]"
+          style={{ background: color }}
+        />
+      )}
+      <span className="flex-1 text-muted-foreground">{label}</span>
+      <span className="font-mono font-medium text-foreground tabular-nums">
+        {value}
+      </span>
+    </div>
+  )
+}
+
+export type StackDatum = {
+  key: string
+  hour: string
+  title: string
+  href?: string
+} & Record<string, string | number | undefined>
+
+// Durations are plotted in minutes, so the axis gets round ticks (0 / 2 / 4 分).
+const format = (min: number) => fmtMs(min * 60_000)
+const short = (min: number) => `${+min.toFixed(1)}\u00a0分`
+
+/** Stacked columns per round of how long each part took (milliseconds in, one colour per part,
+ * with a legend). */
+export function StackBars({
+  data: rows,
+  parts,
+}: {
+  data: StackDatum[]
+  parts: readonly { key: string; label: string; light: string; dark: string }[]
+}) {
+  const data = rows.map((d) => ({
+    ...d,
+    ...Object.fromEntries(
+      parts.map((p) => [p.key, (Number(d[p.key]) || 0) / 60_000])
+    ),
+  }))
+  const onClick = useColumnClick(data)
+  const total = (d: StackDatum) =>
+    parts.reduce((a, p) => a + (Number(d[p.key]) || 0), 0)
+  const shown = pickLabels(data, total)
+  const last = parts.at(-1)!.key
+  return (
+    <ChartContainer
+      config={Object.fromEntries(
+        parts.map((p) => [
+          p.key,
+          { label: p.label, theme: { light: p.light, dark: p.dark } },
+        ])
+      )}
+      className={cn(
+        "aspect-auto h-[240px] w-full",
+        onClick && "cursor-pointer"
+      )}
+    >
+      <BarChart
+        data={data.map((d, i) => ({
+          ...d,
+          label: shown(i) ? short(total(d)) : "",
+        }))}
+        margin={{ top: 18, left: 0, right: 14 }}
+        accessibilityLayer
+        onClick={onClick}
+      >
+        <CartesianGrid vertical={false} />
+        <XAxis
+          dataKey="hour"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={6}
+          interval={0}
+          fontSize={11}
+        />
+        <YAxis
+          width={44}
+          tickLine={false}
+          axisLine={false}
+          tickCount={4}
+          fontSize={11}
+          tickFormatter={short}
+        />
+        <ChartTooltip
+          cursor={false}
+          content={
+            <ChartTooltipContent
+              labelFormatter={(_, p) =>
+                `${p[0]?.payload.title} · 共 ${format(total(p[0]?.payload))}`
+              }
+              formatter={(value, name, item) => (
+                <TooltipRow
+                  label={
+                    parts.find((p) => p.key === name)?.label ?? String(name)
+                  }
+                  value={format(Number(value))}
+                  color={item.color}
+                />
+              )}
+            />
+          }
+        />
+        {/* in the parts' own order; recharts sorts the legend by name otherwise */}
+        <ChartLegend
+          content={<ChartLegendContent />}
+          itemSorter={(item) => parts.findIndex((p) => p.key === item.dataKey)}
+        />
+        {parts.map((p) => (
+          <Bar
+            key={p.key}
+            dataKey={p.key}
+            name={p.key}
+            stackId="round"
+            fill={`var(--color-${p.key})`}
+            radius={p.key === last ? [4, 4, 0, 0] : 0}
+            maxBarSize={24}
+            // 2px of the card between stacked parts, taken off the top of each lower part
+            shape={
+              p.key === last
+                ? undefined
+                : (props: BarShapeProps) => (
+                    <Rectangle
+                      {...props}
+                      y={props.y + 2}
+                      height={Math.max(0, props.height - 2)}
+                    />
+                  )
+            }
+          >
+            {p.key === last && (
+              <LabelList
+                dataKey="label"
+                position="top"
+                offset={6}
+                className="fill-muted-foreground tabular-nums"
+                fontSize={11}
+              />
+            )}
+          </Bar>
+        ))}
       </BarChart>
     </ChartContainer>
   )
@@ -515,31 +758,94 @@ export function RepairSettingsForm({
 }) {
   const [message, action, pending] = useActionState(saveRepairSettings, null)
   const prompt = useRef<HTMLTextAreaElement>(null)
+  const key = useRef<HTMLInputElement>(null)
   return (
     <form
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
         const data = new FormData(e.currentTarget)
+        // The key is in data now; don't leave it in the page
+        if (key.current) key.current.value = ""
         startTransition(() => action(data))
       }}
       className="flex flex-col gap-5"
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Field
-          id="model"
-          label="模型"
-          hint={`api.hotday.uk 上的模型名，默认 ${r.defaults.model}`}
+          id="api_base"
+          label="接口地址"
+          hint={`OpenAI 兼容接口：调模型用 /chat/completions，列模型用 /models；默认 ${r.defaults.api_base}`}
           className="sm:col-span-2"
         >
           <Input
-            id="model"
-            name="model"
-            defaultValue={r.model}
+            id="api_base"
+            name="api_base"
+            defaultValue={r.api_base}
             autoCapitalize="none"
             spellCheck={false}
             className="h-11 font-mono md:h-9"
           />
+        </Field>
+        <Field
+          id="api_key"
+          label="密钥"
+          hint={
+            r.key
+              ? `现在用 hotToday/.env 里的 ${r.key}${r.key === "HOT_EMBED_KEY" ? "（和向量化共用）" : ""}；留空不改，填了就写进 .env 的 HOT_REPAIR_KEY，不进数据库`
+              : ".env 里没有密钥，调不了模型；填了就写进 .env 的 HOT_REPAIR_KEY"
+          }
+          className="sm:col-span-2"
+        >
+          <Input
+            ref={key}
+            id="api_key"
+            name="api_key"
+            type="password"
+            placeholder={r.key ? "已设置，留空不改" : "没有密钥"}
+            autoComplete="new-password"
+            spellCheck={false}
+            className="h-11 font-mono md:h-9"
+          />
+        </Field>
+        <Field
+          id="model"
+          label="模型"
+          hint={
+            r.models.length
+              ? `接口的 /models 列出 ${r.models.length} 个；换了接口地址或密钥，保存后这里按新的接口刷新。默认 ${r.defaults.model}`
+              : `读不到模型列表（${r.models_error ?? "列表是空的"}），先手填；默认 ${r.defaults.model}`
+          }
+          className="sm:col-span-2"
+        >
+          {r.models.length ? (
+            <NativeSelect
+              id="model"
+              name="model"
+              defaultValue={r.model}
+              className="w-full font-mono"
+            >
+              {!r.models.includes(r.model) && (
+                <NativeSelectOption value={r.model}>
+                  {r.model}（接口没列出它）
+                </NativeSelectOption>
+              )}
+              {r.models.map((m) => (
+                <NativeSelectOption key={m} value={m}>
+                  {m}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          ) : (
+            <Input
+              id="model"
+              name="model"
+              defaultValue={r.model}
+              autoCapitalize="none"
+              spellCheck={false}
+              className="h-11 font-mono md:h-9"
+            />
+          )}
         </Field>
         {(Object.keys(r.ranges) as RepairLimit[]).map((key) => (
           <Field
@@ -718,5 +1024,221 @@ export function SubpoolForm({
         </AlertDialogContent>
       </AlertDialog>
     </form>
+  )
+}
+
+export type SubscriptionRow = {
+  label: string // the origin only: the rest of a subscription URL is its access token
+  file?: boolean // f= lines are only shown
+  status: {
+    nodes: number
+    available: number
+    ms: number
+    error?: string
+  } | null // null: subpool hasn't loaded this line (the file changed since it started)
+}
+
+type SubscriptionEdit = {
+  op: "add" | "replace" | "delete"
+  index: number
+  label: string
+}
+
+/** subpool.conf's subscriptions and what each gave at subpool's latest load. Adding, replacing or
+ * deleting one rewrites subpool.conf and restarts subpool; a full URL only ever goes to the server. */
+export function Subscriptions({
+  rows,
+  checking,
+}: {
+  rows: SubscriptionRow[]
+  checking: boolean // subpool just started: its first health checks are still running
+}) {
+  const [message, action, pending] = useActionState(editSubscription, null)
+  // edit stays set after closing, so the dialog keeps its text while it fades out
+  const [edit, setEdit] = useState<SubscriptionEdit | null>(null)
+  const [open, setOpen] = useState(false)
+  const url = useRef<HTMLInputElement>(null)
+  const ask = (e: SubscriptionEdit) => {
+    setEdit(e)
+    setOpen(true)
+  }
+  const send = () => {
+    if (!edit) return
+    const form = new FormData()
+    form.set("op", edit.op)
+    form.set("index", String(edit.index))
+    form.set("label", edit.label)
+    form.set("url", url.current?.value ?? "")
+    setOpen(false)
+    startTransition(() => action(form))
+  }
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="pl-4 sm:pl-6">订阅</TableHead>
+            <TableHead>状态</TableHead>
+            <TableHead className="hidden sm:table-cell">可用 / 节点</TableHead>
+            <TableHead className="hidden sm:table-cell">拉取用时</TableHead>
+            <TableHead className="pr-4 sm:pr-6">
+              <span className="sr-only">操作</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => {
+            const s = r.status
+            return (
+              <TableRow key={`${i}-${r.label}`}>
+                <TableCell className="w-full max-w-0 pl-4 sm:pl-6">
+                  <span className="block truncate font-mono text-xs">
+                    {r.file
+                      ? `文件 ${r.label}`
+                      : r.label.replace(/^https:\/\//, "")}
+                  </span>
+                  {s?.error && (
+                    <span
+                      title={s.error}
+                      className="block truncate font-mono text-xs text-destructive"
+                    >
+                      {s.error}
+                    </span>
+                  )}
+                  {s && !s.error && (
+                    <span className="block truncate text-xs text-muted-foreground tabular-nums sm:hidden">
+                      {s.available} / {s.nodes} 可用
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {!s ? (
+                    <Badge variant="secondary">还没加载</Badge>
+                  ) : s.error ? (
+                    <Badge variant="destructive">拉取失败</Badge>
+                  ) : s.available ? (
+                    <Badge variant="outline">正常</Badge>
+                  ) : checking ? (
+                    <Badge variant="secondary">检测中</Badge>
+                  ) : (
+                    <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                      没有可用节点
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="hidden tabular-nums sm:table-cell">
+                  {s ? (
+                    <>
+                      {s.available}{" "}
+                      <span className="text-muted-foreground">/ {s.nodes}</span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
+                  {s ? fmtMs(s.ms) : "—"}
+                </TableCell>
+                <TableCell className="pr-4 sm:pr-6">
+                  {!r.file && (
+                    <span className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() =>
+                          ask({ op: "replace", index: i, label: r.label })
+                        }
+                      >
+                        替换
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending || rows.length < 2}
+                        className="text-destructive hover:text-destructive"
+                        onClick={() =>
+                          ask({ op: "delete", index: i, label: r.label })
+                        }
+                      >
+                        删除
+                      </Button>
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-2 pb-2 sm:px-6">
+        <Button
+          variant="outline"
+          disabled={pending}
+          className="h-11 md:h-9"
+          onClick={() => ask({ op: "add", index: -1, label: "" })}
+        >
+          添加订阅
+        </Button>
+        <Pending pending={pending} message={message}>
+          {edit?.op === "delete"
+            ? "写入 subpool.conf，重启中…"
+            : "先试着打开链接，再写入并重启…"}
+        </Pending>
+      </div>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              send()
+            }}
+            className="contents"
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {edit?.op === "add"
+                  ? "添加订阅"
+                  : edit?.op === "replace"
+                    ? `替换订阅 ${edit.index + 1}`
+                    : `删除订阅 ${(edit?.index ?? 0) + 1}？`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {edit?.op === "delete"
+                  ? `${edit.label} 的节点会从代理池里去掉。`
+                  : edit?.op === "replace"
+                    ? `换掉 ${edit.label}。保存前会先试着打开新链接，打不开就不保存。`
+                    : "保存前会先试着打开这个链接，打不开就不保存。"}
+                写入 subpool.conf 后重启
+                subpool，代理会断开几秒；整点刚过时别改。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            {edit?.op !== "delete" && (
+              <Input
+                ref={url}
+                key={`${edit?.op}-${edit?.index}`}
+                type="url"
+                required
+                placeholder="https://…"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                aria-label="订阅链接"
+                className="h-11 font-mono md:h-9"
+              />
+            )}
+            <AlertDialogFooter>
+              <AlertDialogCancel type="button">取消</AlertDialogCancel>
+              <AlertDialogAction
+                type="submit"
+                variant={edit?.op === "delete" ? "destructive" : "default"}
+              >
+                {edit?.op === "delete" ? "删除并重启" : "保存并重启"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

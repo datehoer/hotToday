@@ -281,12 +281,27 @@ export const REPAIR_STATE: Record<RepairState, string> = {
   reverted: "已撤销",
 }
 
-async function queryRepairs(where: string, args: unknown[]) {
+// ops.repair appears with repair.py's first run; until then there is nothing to show.
+async function ifRepairs<T>(read: () => Promise<T>, none: T) {
   try {
+    return await read()
+  } catch (e) {
+    if ((e as { code?: string }).code === "42P01") return none
+    throw e
+  }
+}
+
+const queryRepairs = (
+  where: string,
+  args: unknown[],
+  order = "id desc",
+  limit = 20
+) =>
+  ifRepairs(async () => {
     const rows = await query<Repair>(
       `select id, source, state, category, reason, summary, evidence, model, tokens, attempts, diff,
               dry_run, checks, verify, steps, log, created_at, updated_at, applied_at
-         from ops.repair where ${where} order by id desc limit 20`,
+         from ops.repair where ${where} order by ${order} limit ${Math.trunc(limit)}`,
       args
     )
     // Not the diff: version numbers in User-Agent strings look like IPs.
@@ -294,17 +309,54 @@ async function queryRepairs(where: string, args: unknown[]) {
       ...(JSON.parse(maskIp(JSON.stringify(r))) as Omit<Repair, "diff">),
       diff,
     }))
-  } catch (e) {
-    if ((e as { code?: string }).code === "42P01") return [] // no task yet
-    throw e
-  }
-}
+  }, [])
 
 export const getRepairs = (source: string) =>
   queryRepairs("source = $1", [source])
 
-export const getOpenRepairs = () =>
-  queryRepairs("state in ('analyzing', 'awaiting_review')", [])
+// Open tasks, plus the ones that moved in the last day (approved, recovered, …).
+export const getActiveRepairs = (since: number) =>
+  queryRepairs(
+    "state in ('analyzing', 'awaiting_review', 'observing') or updated_at > $1",
+    [since],
+    "updated_at desc"
+  )
+
+/** Every task, the most recently changed first; states narrows it. */
+export const getRepairLog = (states: RepairState[] | null, limit: number) =>
+  queryRepairs(
+    states ? "state = any($1)" : "true",
+    states ? [states] : [],
+    "updated_at desc, id desc",
+    limit
+  )
+
+export const countRepairs = () =>
+  ifRepairs(
+    () =>
+      query<{ state: RepairState; n: number }>(
+        "select state, count(*)::int as n from ops.repair group by state"
+      ),
+    []
+  )
+
+/** The first two rounds after each applied patch went live (what settle() judges it by), by task id. */
+export async function getRunsAfter(repairs: Repair[]) {
+  const ids = repairs.filter((r) => r.applied_at).map((r) => r.id)
+  const rows = ids.length
+    ? await queryRuns(
+        `select r.id as repair, u.*
+           from ops.repair r
+           join lateral (select * from ops.run u
+                          where u.source = r.source and u.round_at > r.applied_at
+                          order by u.round_at limit 2) u on true
+          where r.id = any($1::bigint[])
+          order by u.round_at`,
+        [ids]
+      )
+    : []
+  return Map.groupBy(rows as (Run & { repair: number })[], (r) => r.repair)
+}
 
 // The spider's configuration as it sees it: `task.py --config` inside the container validates every
 // source.yaml and reports the AI repair settings (ops.setting merged with repair.py's defaults; no
@@ -327,8 +379,9 @@ export type SpiderConfig = {
   proxies: Record<string, string>
   keep_days: number
   repair: RepairSettings & {
-    api_url: string
-    key: string | null // which environment variable holds the key
+    key: string | null // which line of hotToday/.env holds the key (never the key itself)
+    models: string[] // GET {api_base}/models with that key, sorted
+    models_error: string | null
     custom_system: boolean // false: the prompt built into repair.py
     defaults: RepairSettings
     ranges: Record<RepairLimit, [number, number, string]> // min, max, name
@@ -355,6 +408,7 @@ export const REPAIR_LIMITS = [
 export type RepairLimit = (typeof REPAIR_LIMITS)[number]
 export type RepairSettings = Record<RepairLimit, number> & {
   model: string
+  api_base: string // OpenAI-compatible: {api_base}/chat/completions, {api_base}/models
   system: string
 }
 
@@ -381,7 +435,7 @@ export async function getConfig() {
   return JSON.parse(maskIp(stdout)) as SpiderConfig
 }
 
-const HOTTODAY = process.env.HOTTODAY_DIR ?? "/srv/projects/hotToday"
+export const HOTTODAY = process.env.HOTTODAY_DIR ?? "/srv/projects/hotToday"
 
 // Hard-coded cookies and tokens in spider code, proxy accounts and keys in URLs (as hotToday's
 // redact and repair.SECRET_RE do). No IP masking here: User-Agent versions look like IPs.
@@ -427,7 +481,20 @@ export type ProxyStats = {
     strategy: string
     check_interval_sec: number
   }
-  subscribe: { at: string; nodes: number; error?: string }
+  subscribe: {
+    at: string
+    nodes: number
+    error?: string
+    // One per subscription in subpool.conf order (u= lines, then f= lines); a URL shows only its origin
+    sources?: {
+      kind: "url" | "file"
+      name: string
+      nodes: number
+      available: number // of its nodes, how many pass health checks now
+      ms: number
+      error?: string
+    }[]
+  }
   watchdog: {
     interval_sec: number
     fail_limit: number
@@ -447,7 +514,7 @@ export type ProxyStats = {
 const SUBPOOL_STATS = process.env.SUBPOOL_STATS ?? "http://127.0.0.1:9090/stats"
 
 // fetch() hides the reason (ECONNREFUSED, timeout) in error.cause.
-const failure = (e: unknown) => {
+export const failure = (e: unknown) => {
   const err = e as Error & { cause?: Error }
   return maskIp(err?.cause?.message ?? err?.message ?? String(e))
 }
@@ -543,13 +610,15 @@ export async function getSubpoolConf() {
   return {
     values,
     listens: all("l").map((v) => maskIp(v.replace(/\/\/[^/@\s]*@/, "//***@"))),
-    subscriptions: [
-      ...all("u").map((v) => maskIp(URL.parse(v)?.origin ?? "?") + "/…"),
-      ...all("f").map((v) => `文件 ${v}`),
-    ],
+    urls: all("u").map(maskSubscription), // edits name a URL by its position and this label
+    files: all("f"),
     stats: all("stats").at(-1) ?? null,
   }
 }
+
+/** A subscription URL as the site shows it: the origin only, the rest carries the access token. */
+export const maskSubscription = (url: string) =>
+  maskIp(URL.parse(url)?.origin ?? "?") + "/…"
 
 export async function getPgStatus() {
   try {

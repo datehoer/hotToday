@@ -104,18 +104,10 @@ export default async function Sources({
                 <TableHead className="hidden md:table-cell">
                   最近 24 轮
                 </TableHead>
-                <TableHead className="hidden text-right sm:table-cell">
-                  本轮条数
-                </TableHead>
-                <TableHead className="hidden text-right lg:table-cell">
-                  平时
-                </TableHead>
-                <TableHead className="hidden text-right lg:table-cell">
-                  耗时
-                </TableHead>
-                <TableHead className="pr-4 text-right sm:pr-6">
-                  最近写入
-                </TableHead>
+                <TableHead className="hidden sm:table-cell">本轮条数</TableHead>
+                <TableHead className="hidden lg:table-cell">平时</TableHead>
+                <TableHead className="hidden lg:table-cell">耗时</TableHead>
+                <TableHead className="pr-4 sm:pr-6">最近写入</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -140,18 +132,18 @@ export default async function Sources({
                       <Spark history={s.history} />
                     )}
                   </TableCell>
-                  <TableCell className="hidden text-right font-medium tabular-nums sm:table-cell">
+                  <TableCell className="hidden font-medium tabular-nums sm:table-cell">
                     {s.run.status === "disabled" ? "—" : fmtNum(s.run.items)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums lg:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                     {fmtNum(s.usual)}
                   </TableCell>
-                  <TableCell className="hidden text-right text-muted-foreground tabular-nums lg:table-cell">
+                  <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
                     {fmtMs(s.run.ms)}
                   </TableCell>
                   <TableCell
                     className={cn(
-                      "pr-4 text-right tabular-nums sm:pr-6",
+                      "pr-4 tabular-nums sm:pr-6",
                       bad(s) ? "text-destructive" : "text-muted-foreground"
                     )}
                   >

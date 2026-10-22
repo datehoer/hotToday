@@ -2,7 +2,12 @@ import { RiArrowRightSLine, RiErrorWarningLine } from "@remixicon/react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
-import { RepairSettingsForm, SubpoolForm } from "@/components/ops-client"
+import {
+  RepairSettingsForm,
+  SubpoolForm,
+  Subscriptions,
+  type SubscriptionRow,
+} from "@/components/ops-client"
 import { Facts, PageHeader, PageTitle, PillNav } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +28,7 @@ import {
 } from "@/components/ui/table"
 import {
   getConfig,
+  getProxyStats,
   getSubpoolConf,
   SUBPOOL_CONF,
   SUBPOOL_FIELDS,
@@ -30,6 +36,7 @@ import {
   type SourceConfig,
   type SpiderConfig,
 } from "@/lib/ops"
+import { fmtTime } from "@/lib/utils"
 
 export const metadata: Metadata = { title: "配置" }
 
@@ -179,12 +186,8 @@ function Sources({ config }: { config: SpiderConfig }) {
               <TableHead>方式</TableHead>
               <TableHead className="hidden lg:table-cell">抓取</TableHead>
               <TableHead className="hidden sm:table-cell">代理</TableHead>
-              <TableHead className="hidden text-right md:table-cell">
-                超时
-              </TableHead>
-              <TableHead className="hidden text-right md:table-cell">
-                重试
-              </TableHead>
+              <TableHead className="hidden md:table-cell">超时</TableHead>
+              <TableHead className="hidden md:table-cell">重试</TableHead>
               <TableHead className="pr-4 sm:pr-6">状态</TableHead>
             </TableRow>
           </TableHeader>
@@ -216,10 +219,10 @@ function Sources({ config }: { config: SpiderConfig }) {
                 <TableCell className="hidden text-muted-foreground sm:table-cell">
                   {s.proxy === "none" ? "—" : s.proxy}
                 </TableCell>
-                <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
+                <TableCell className="hidden text-muted-foreground tabular-nums md:table-cell">
                   {s.timeout}
                 </TableCell>
-                <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">
+                <TableCell className="hidden text-muted-foreground tabular-nums md:table-cell">
                   {s.retries}
                 </TableCell>
                 <TableCell className="pr-4 sm:pr-6">
@@ -255,18 +258,10 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>模型、限额和提示词</CardTitle>
+          <CardTitle>接口、模型、限额和提示词</CardTitle>
           <CardDescription>
-            存在 PostgreSQL 的
-            ops.setting，保存后下一轮和之后开的任务就按新设置。接口{" "}
-            <span className="font-mono break-all">{r.api_url}</span>
-            ；密钥不进库，
-            {r.key === "HOT_EMBED_KEY"
-              ? "用环境变量 HOT_EMBED_KEY（和向量化共用）"
-              : r.key
-                ? `用环境变量 ${r.key}`
-                : "环境变量里没有，调不了模型"}
-            。
+            存在 PostgreSQL 的 ops.setting（密钥除外，它在
+            hotToday/.env），保存后下一轮和之后开的任务就按新设置。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -361,7 +356,7 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
 }
 
 async function Subpool() {
-  const conf = await getSubpoolConf()
+  const [conf, proxy] = await Promise.all([getSubpoolConf(), getProxyStats()])
   if ("error" in conf)
     return (
       <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
@@ -372,6 +367,20 @@ async function Subpool() {
         </AlertDescription>
       </Alert>
     )
+  const p = "stats" in proxy ? proxy.stats : null
+  // subpool lists its subscriptions in the file's order; a line it hasn't loaded has no result.
+  const loaded = p?.subscribe.sources ?? []
+  const rows: SubscriptionRow[] = [
+    ...conf.urls.map((label) => ({ label, file: false })),
+    ...conf.files.map((label) => ({ label, file: true })),
+  ].map((r, i) => ({
+    ...r,
+    status:
+      loaded[i] &&
+      (r.file ? loaded[i].name === r.label : `${loaded[i].name}/…` === r.label)
+        ? loaded[i]
+        : null,
+  }))
   return (
     <>
       <Card>
@@ -389,12 +398,23 @@ async function Subpool() {
           />
         </CardContent>
       </Card>
+      <Card className="py-2">
+        <CardHeader className="pt-4">
+          <CardTitle>订阅</CardTitle>
+          <CardDescription>
+            {p
+              ? `${fmtTime(Date.parse(p.subscribe.at) / 1000)} 拉取的结果，可用数是现在通过健康检测的节点。`
+              : `subpool 没在运行，看不到拉取结果：${"error" in proxy ? proxy.error : ""}。`}
+            链接里带着订阅密钥，网页上只显示域名；添加和替换要贴完整链接。
+          </CardDescription>
+        </CardHeader>
+        <Subscriptions rows={rows} checking={!!p && p.pool.uptime_sec < 30} />
+      </Card>
       <Card>
         <CardHeader>
-          <CardTitle>订阅和监听</CardTitle>
+          <CardTitle>监听和统计</CardTitle>
           <CardDescription>
-            只读：订阅链接和监听账号里有密钥，网页上不显示也不改，要改就直接改
-            subpool.conf。
+            只读：监听账号里有密码，要改就直接改 subpool.conf。
             <Link
               href="/status"
               className="ml-1 underline-offset-4 hover:underline"
@@ -406,17 +426,6 @@ async function Subpool() {
         <CardContent>
           <Facts
             rows={[
-              [
-                "订阅",
-                <span
-                  key="v"
-                  className="flex flex-col font-mono text-xs leading-5"
-                >
-                  {conf.subscriptions.map((u, i) => (
-                    <span key={i}>{u}</span>
-                  ))}
-                </span>,
-              ],
               [
                 "监听",
                 <span key="v" className="font-mono text-xs">
