@@ -59,10 +59,12 @@ PY
 ENV CHROME_PATH=/opt/google/chrome/chrome
 RUN "$CHROME_PATH" --version
 
-# 自检：node 和 jsdom 补丁都在，缺了 spider 会自动退回浏览器方案
+# 自检：node 和 jsdom 补丁都在
 RUN node -e "require('/opt/wafnode/node_modules/jsdom'); console.log('jsdom ok')" \
     && grep -q __wafNav /opt/wafnode/node_modules/jsdom/lib/jsdom/living/window/navigation.js \
     && echo 'jsdom navigation hook ok'
 COPY . /app/
+# 源的 requires 和镜像对不上 (缺程序、Python 包或环境变量) 时构建直接失败，不用等到整点那一轮
+RUN python task.py --check
 
 CMD ["python", "task.py"]

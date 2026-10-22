@@ -145,17 +145,15 @@ page.goto("https://xueqiu.com/today", timeout=30000, wait_until="domcontentloade
 镜像里 Chrome 仍在（`/opt/google/chrome/chrome`，pin 在 Dockerfile），patchright 也仍在
 `requirements.txt`，所以恢复时不用改镜像。
 
-## 九、已知问题：AI 自动修复跑不动这个源
+## 九、AI 自动修复
 
-`repair.py` 的 `unsupported()` 靠 `patchright|playwright` 关键字判断「浏览器类源」。
-直连版没有这两个词，于是 xueqiu **变成了可被 AI 自动修复的源**，但它的沙箱
-（`dry_run`）只复制源目录**顶层的 .py/.yaml**，不复制子目录、也不传 `WAF_NODE_PATH`：
+以前修不了：沙箱（`dry_run`）只复制源目录顶层的 .py/.yaml，试抓必然报「缺少 waf/solver.js」。
+现在沙箱复制整个源目录，`source.yaml` 的 `requires` 声明了 node 和 `WAF_NODE_PATH`，沙箱也拿到这个变量
+（2026-10-22 实测试抓 ok，15 条）。
 
-```
-dry_run status: error
-RuntimeError: 缺少 waf/solver.js
-```
+node 联网不经过沙箱里 Python 那层网络限制，所以只有主机防火墙在的时候（`/etc/hottoday-sandbox.nft`，
+`hottoday-sandbox-net` 服务：uid 65534 只能连公网），`repair.py` 才把这个源交给模型，不然交给人。
+模型只能改 `spider.py` 和 `source.yaml`，`waf/` 和 `requires` 改不了。
 
-结果就是修复任务必然空跑、白烧 token（最多重试 RETRIES 次）。
-根因和「运行时依赖表达不了」是同一件事：**框架假设「一个源 = 几个 Python 文件」**，
-没有「源目录里还有别的资源」和「这个源需要什么运行时」的概念。
+生产上 node 也降成 nobody、只拿 `WAF_*` 这几个环境变量：jsdom 的 `runScripts: 'dangerously'` 不是沙箱，
+跑的是雪球的脚本，现在它读不到 `/app` 和 `.env`，也只能连公网。

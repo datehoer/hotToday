@@ -25,6 +25,7 @@
 import argparse
 import ast
 import difflib
+import errno
 import ipaddress
 import itertools
 import json
@@ -447,6 +448,17 @@ def triage(spec, run, normal):
     return "structural", "parse_error", error[:200]
 
 
+def walled():
+    """nobody 连本机被防火墙立刻拒绝 (EHOSTUNREACH, 规则在 /etc/hottoday-sandbox.nft) 时返回 True"""
+    probe = "import socket\ntry:\n    socket.create_connection(('127.0.0.1', 9), 3)\nexcept OSError as err:\n    raise SystemExit(err.errno)"
+    try:
+        code = subprocess.run([sys.executable, "-I", "-c", probe], env={}, user=NOBODY, group=NOBODY, extra_groups=[],
+                              capture_output=True, timeout=10).returncode
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return code == errno.EHOSTUNREACH
+
+
 def unsupported(spec):
     """沙箱试抓不了的源返回原因, 这些不交给模型"""
     lack = plugins.missing(spec)
@@ -454,9 +466,9 @@ def unsupported(spec):
         return f"镜像缺依赖 ({', '.join(lack)}), 要重建镜像"
     if spec["proxy"] != "none":
         return "用代理的源先不交给 AI (试抓要把代理账号放进沙箱)"
-    if spec["requires"]["bin"]:
-        # 沙箱只拦得住 Python 发出的请求, 这些程序自己联网管不到
-        return f"要用 {', '.join(spec['requires']['bin'])} 的源先不交给 AI (沙箱的网络限制管不到 Python 以外的程序)"
+    if spec["requires"]["bin"] and not walled():
+        # 沙箱只拦得住 Python 发出的请求, 别的程序联网只有防火墙管得住
+        return f"要用 {', '.join(spec['requires']['bin'])} 的源要先开沙箱防火墙 (hottoday-sandbox-net) 才交给 AI"
     if any(re.search(r"patchright|playwright", p.read_text(encoding="utf-8"))
            for p in (plugins.SOURCES_DIR / spec["key"]).rglob("*.py") if "node_modules" not in p.parts):
         return "浏览器类源, 沙箱里跑不了浏览器"

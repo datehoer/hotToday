@@ -27,6 +27,9 @@ NODE_PATH = os.getenv("WAF_NODE_PATH") or os.path.join(WAF_DIR, "node_modules")
 TAG_RE = re.compile(r"<[^>]+>")
 STOCK_TAG_RE = re.compile(r"\$[^$\s]{1,30}\$")
 NODE_BIN = os.getenv("WAF_NODE_BIN", "node")
+# node 跑的是雪球自己的脚本 (jsdom 的 runScripts: 'dangerously' 不是沙箱), 所以 root 跑时降成 nobody:
+# 读不到 /app 和 .env, 主机防火墙 (/etc/hottoday-sandbox.nft) 只让它连公网
+NOBODY = 65534
 
 
 def _log():
@@ -39,26 +42,38 @@ def _log():
 
 
 def _solve_challenge(page_html, ext_scripts, target_url):
-    """把挑战页丢给 Node + jsdom, 让雪球自己的脚本算出带 md5__1038 的 URL"""
+    """把挑战页丢给 Node + jsdom, 让雪球自己的脚本算出带 md5__1038 的 URL。
+    node 只拿到下面这几个环境变量, 爬虫的密钥不给它"""
     if not os.path.isfile(SOLVER):
         raise RuntimeError("缺少 waf/solver.js")
     work = tempfile.mkdtemp(prefix="xqwaf-")
     try:
+        shutil.copyfile(SOLVER, os.path.join(work, "solver.js"))  # nobody 进不了 /app
         with open(os.path.join(work, "page.html"), "w", encoding="utf-8") as fh:
             fh.write(page_html)
         for i, code in enumerate(ext_scripts):
             with open(os.path.join(work, "ext_%d.js" % i), "w", encoding="utf-8") as fh:
                 fh.write(code)
         env = dict(
-            os.environ,
+            PATH=os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            HOME=work,
+            NODE_PATH=NODE_PATH,
             WAF_DIR=work,
             WAF_URL=target_url,
             WAF_UA=UA,
-            NODE_PATH=NODE_PATH,
             WAF_WAIT_MS=os.getenv("WAF_WAIT_MS", "15000"),
         )
+        # 时区和语言可能算进挑战脚本的指纹, 和以前一样照传
+        env.update({k: os.environ[k] for k in ("TZ", "LANG") if k in os.environ})
+        drop = {}
+        if os.geteuid() == 0:
+            os.chmod(work, 0o755)
+            for name in os.listdir(work):
+                os.chmod(os.path.join(work, name), 0o644)
+            drop = dict(user=NOBODY, group=NOBODY, extra_groups=[])
         proc = subprocess.run(
-            [NODE_BIN, SOLVER], env=env, capture_output=True, text=True, timeout=90
+            [NODE_BIN, os.path.join(work, "solver.js")],
+            env=env, capture_output=True, text=True, timeout=90, **drop
         )
         lines = [ln for ln in (proc.stdout or "").strip().splitlines() if ln.strip()]
         if not lines:
