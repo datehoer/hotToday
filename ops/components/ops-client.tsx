@@ -1,8 +1,10 @@
 "use client"
 
 import {
+  RiCheckLine,
   RiDashboardLine,
   RiDatabase2Line,
+  RiErrorWarningLine,
   RiFireFill,
   RiHistoryLine,
   RiLogoutBoxRLine,
@@ -47,6 +49,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
@@ -67,7 +70,6 @@ import {
 } from "@/components/ui/chart"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Sidebar,
   SidebarContent,
@@ -81,6 +83,13 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -93,6 +102,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import type {
   RepairLimit,
+  Reply,
   SpiderConfig,
   SUBPOOL_FIELDS,
   SUBPOOL_STRATEGIES,
@@ -618,9 +628,17 @@ export function LoginForm({ next }: { next: string }) {
 export type RepairOp = {
   op: "approve" | "reject" | "revert" | "run"
   label: string
-  /** Ask in a dialog before sending */
-  confirm?: { title: string; text: string }
+  /** The dialog's question before sending */
+  confirm: { title: string; text: string }
   variant?: "default" | "outline" | "destructive"
+}
+
+// What the dialog says while each one runs
+const REPAIR_BUSY: Record<RepairOp["op"], [string, string?]> = {
+  approve: ["正在应用补丁", "写进 sources/ 后用新代码跑一次这个源，最多 40 秒"],
+  reject: ["正在驳回"],
+  revert: ["正在撤销补丁"],
+  run: ["正在开始分析"],
 }
 
 /** Buttons for one repair task, or for starting one; the reply is repair.py's last output line. */
@@ -633,91 +651,181 @@ export function RepairButtons({
   source: string
   ops: RepairOp[]
 }) {
-  const [message, action, pending] = useActionState(repairAction, null)
+  const action = useAction()
   // asking stays set after closing, so the dialog keeps its text while it fades out
   const [asking, setAsking] = useState<RepairOp | null>(null)
-  const [open, setOpen] = useState(false)
-  const send = (op: RepairOp["op"]) => {
-    const form = new FormData()
-    form.set("id", String(id ?? ""))
-    form.set("key", source)
-    form.set("op", op)
-    startTransition(() => action(form))
-  }
+  const [busy, wait] = REPAIR_BUSY[asking?.op ?? "run"]
   return (
     <div className="flex flex-wrap items-center gap-2">
       {ops.map((o) => (
         <Button
           key={o.op}
           variant={o.variant ?? "outline"}
-          disabled={pending}
           className="h-11 md:h-9"
           onClick={() => {
-            if (!o.confirm) return send(o.op)
             setAsking(o)
-            setOpen(true)
+            action.ask()
           }}
         >
           {o.label}
         </Button>
       ))}
-      <Pending pending={pending} message={message}>
-        {asking?.op === "approve" ? "应用补丁并用新代码跑一次…" : "处理中…"}
-      </Pending>
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{asking?.confirm?.title}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {asking?.confirm?.text}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              variant={
-                asking?.variant === "destructive" ? "destructive" : "default"
-              }
-              onClick={() => {
-                setOpen(false)
-                if (asking) send(asking.op)
-              }}
-            >
-              {asking?.label}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActionDialog
+        action={action}
+        title={asking?.confirm.title}
+        description={asking?.confirm.text}
+        confirm={asking?.label}
+        destructive={asking?.variant === "destructive"}
+        busy={busy}
+        wait={wait}
+        onConfirm={() => {
+          if (!asking) return
+          const form = new FormData()
+          form.set("id", String(id ?? ""))
+          form.set("key", source)
+          form.set("op", asking.op)
+          action.run(() => repairAction(form))
+        }}
+      />
     </div>
   )
 }
 
-/** What a form or button is doing: a spinner and `children` while pending, then the reply. */
-function Pending({
-  pending,
-  message,
+/** A server action run from a dialog, so neither the wait nor the result is easy to miss. */
+function useAction() {
+  const [open, setOpen] = useState(false)
+  const [pending, start] = useTransition()
+  const [reply, setReply] = useState<Reply | null>(null)
+  return {
+    open,
+    pending,
+    reply,
+    /** Open the dialog on its question. */
+    ask: () => {
+      setReply(null)
+      setOpen(true)
+    },
+    /** Run it; the dialog opens if it isn't open yet and stays open until the reply is in. */
+    run: (send: () => Promise<Reply>) => {
+      setReply(null)
+      setOpen(true)
+      start(async () => {
+        const r = await send().catch((e: Error): Reply => ({
+          ok: false,
+          text: `等回复时连接断了（${e.message}）。操作可能已经在服务器上做完，过一会儿刷新页面看结果。`,
+        }))
+        startTransition(() => setReply(r))
+      })
+    },
+    onOpenChange: (next: boolean) => {
+      if (!pending) setOpen(next)
+    },
+  }
+}
+
+// With an icon, shadcn's header splits its width in two; keep the text next to the icon instead.
+const MEDIA_HEADER = "sm:grid-cols-[auto_1fr]"
+
+/** The dialog of a useAction(): the question (children go under it, e.g. an input), then a spinner
+ * and the seconds so far while the action runs, then its reply. */
+function ActionDialog({
+  action: a,
+  title,
+  description,
+  confirm,
+  destructive,
+  busy,
+  wait,
+  onConfirm,
   children,
 }: {
-  pending: boolean
-  message: string | null
-  children: React.ReactNode
+  action: ReturnType<typeof useAction>
+  title?: React.ReactNode
+  description?: React.ReactNode
+  confirm?: string
+  destructive?: boolean
+  busy: string // what is happening while it runs
+  wait?: string // what it waits for, and how long that usually takes
+  onConfirm?: () => void
+  children?: React.ReactNode
 }) {
-  if (!pending && !message) return null
   return (
-    <span
-      role="status"
-      className="inline-flex items-center gap-2 text-sm text-muted-foreground"
-    >
-      {pending ? (
-        <>
-          <Spinner aria-hidden />
-          {children}
-        </>
-      ) : (
-        message
-      )}
-    </span>
+    <AlertDialog open={a.open} onOpenChange={a.onOpenChange}>
+      <AlertDialogContent>
+        {a.pending ? (
+          <AlertDialogHeader className={MEDIA_HEADER}>
+            <AlertDialogMedia>
+              <Spinner aria-hidden className="size-8" />
+            </AlertDialogMedia>
+            <AlertDialogTitle>{busy}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {wait && `${wait}。`}已经 <Seconds /> 秒，做完之前这个窗口不会关。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        ) : a.reply ? (
+          <>
+            <AlertDialogHeader className={MEDIA_HEADER}>
+              <AlertDialogMedia
+                className={
+                  a.reply.ok
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-destructive/10 text-destructive"
+                }
+              >
+                {a.reply.ok ? <RiCheckLine /> : <RiErrorWarningLine />}
+              </AlertDialogMedia>
+              <AlertDialogTitle>
+                {a.reply.ok ? "完成" : "没做成"}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="[overflow-wrap:anywhere]">
+                {a.reply.text}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel variant="default" autoFocus>
+                好
+              </AlertDialogCancel>
+            </AlertDialogFooter>
+          </>
+        ) : (
+          <form
+            noValidate
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation() // portaled, but React still bubbles it to a form around the dialog
+              onConfirm?.()
+            }}
+            className="contents"
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>{title}</AlertDialogTitle>
+              <AlertDialogDescription>{description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            {children}
+            <AlertDialogFooter>
+              <AlertDialogCancel type="button">取消</AlertDialogCancel>
+              <AlertDialogAction
+                type="submit"
+                variant={destructive ? "destructive" : "default"}
+              >
+                {confirm}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </form>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
   )
+}
+
+/** Seconds since it appeared, counting up. */
+function Seconds() {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setN((v) => v + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return <span className="tabular-nums">{n}</span>
 }
 
 function Field({
@@ -756,7 +864,7 @@ export function RepairSettingsForm({
 }: {
   settings: SpiderConfig["repair"]
 }) {
-  const [message, action, pending] = useActionState(saveRepairSettings, null)
+  const action = useAction()
   const prompt = useRef<HTMLTextAreaElement>(null)
   const key = useRef<HTMLInputElement>(null)
   return (
@@ -767,7 +875,7 @@ export function RepairSettingsForm({
         const data = new FormData(e.currentTarget)
         // The key is in data now; don't leave it in the page
         if (key.current) key.current.value = ""
-        startTransition(() => action(data))
+        action.run(() => saveRepairSettings(data))
       }}
       className="flex flex-col gap-5"
     >
@@ -782,6 +890,7 @@ export function RepairSettingsForm({
             id="api_base"
             name="api_base"
             defaultValue={r.api_base}
+            autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
             className="h-11 font-mono md:h-9"
@@ -819,28 +928,37 @@ export function RepairSettingsForm({
           className="sm:col-span-2"
         >
           {r.models.length ? (
-            <NativeSelect
-              id="model"
-              name="model"
-              defaultValue={r.model}
-              className="w-full font-mono"
-            >
-              {!r.models.includes(r.model) && (
-                <NativeSelectOption value={r.model}>
-                  {r.model}（接口没列出它）
-                </NativeSelectOption>
-              )}
-              {r.models.map((m) => (
-                <NativeSelectOption key={m} value={m}>
-                  {m}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            <Select name="model" defaultValue={r.model}>
+              <SelectTrigger
+                id="model"
+                className="h-11 w-full font-mono md:h-9"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              {/* 30-odd models: a shorter list below the field instead of one covering the form; opaque,
+                  because the preset's blur behind a translucent menu doesn't follow it as it scrolls */}
+              <SelectContent
+                alignItemWithTrigger={false}
+                className="max-h-[min(18rem,var(--available-height))] bg-popover font-mono"
+              >
+                {!r.models.includes(r.model) && (
+                  <SelectItem value={r.model}>
+                    {r.model}（接口没列出它）
+                  </SelectItem>
+                )}
+                {r.models.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : (
             <Input
               id="model"
               name="model"
               defaultValue={r.model}
+              autoComplete="off"
               autoCapitalize="none"
               spellCheck={false}
               className="h-11 font-mono md:h-9"
@@ -866,6 +984,7 @@ export function RepairSettingsForm({
               type="number"
               inputMode="numeric"
               defaultValue={r[key]}
+              autoComplete="off"
               className="h-11 tabular-nums md:h-9"
             />
           </Field>
@@ -897,14 +1016,12 @@ export function RepairSettingsForm({
         />
       </Field>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending} className="h-11 md:h-9">
-          {pending && <Spinner data-icon="inline-start" aria-hidden />}
+        <Button type="submit" className="h-11 md:h-9">
           保存
         </Button>
         <Button
           type="button"
           variant="outline"
-          disabled={pending}
           className="h-11 md:h-9"
           onClick={() => {
             if (prompt.current) prompt.current.value = r.defaults.system
@@ -912,15 +1029,13 @@ export function RepairSettingsForm({
         >
           提示词恢复默认
         </Button>
-        <Pending pending={pending} message={message}>
-          保存中…
-        </Pending>
-        {!pending && !message && r.updated_at && (
+        {r.updated_at && (
           <span className="text-sm text-muted-foreground">
             {fmtTime(r.updated_at)} 由 {r.updated_by} 改过
           </span>
         )}
       </div>
+      <ActionDialog action={action} busy="正在保存 AI 修复设置" />
     </form>
   )
 }
@@ -935,33 +1050,32 @@ export function SubpoolForm({
   fields: typeof SUBPOOL_FIELDS
   strategies: typeof SUBPOOL_STRATEGIES
 }) {
-  const [message, action, pending] = useActionState(saveSubpool, null)
+  const action = useAction()
   const form = useRef<HTMLFormElement>(null)
-  const [open, setOpen] = useState(false)
   return (
     <form
       ref={form}
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
-        setOpen(true)
+        action.ask()
       }}
       className="flex flex-col gap-5"
     >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Field id="s" label="调度策略" className="sm:col-span-2">
-          <NativeSelect
-            id="s"
-            name="s"
-            defaultValue={values.s}
-            className="w-full"
-          >
-            {Object.entries(strategies).map(([v, label]) => (
-              <NativeSelectOption key={v} value={v}>
-                {label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <Select name="s" defaultValue={values.s} items={strategies}>
+            <SelectTrigger id="s" className="h-11 w-full md:h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(strategies).map(([v, label]) => (
+                <SelectItem key={v} value={v}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         {fields.map(({ key, label, hint }) => (
           <Field key={key} id={key} label={label} hint={hint}>
@@ -971,6 +1085,7 @@ export function SubpoolForm({
               type="number"
               inputMode="numeric"
               defaultValue={values[key]}
+              autoComplete="off"
               className="h-11 tabular-nums md:h-9"
             />
           </Field>
@@ -985,44 +1100,29 @@ export function SubpoolForm({
           id="c"
           name="c"
           defaultValue={values.c}
+          autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
           className="h-11 font-mono md:h-9"
         />
       </Field>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending} className="h-11 md:h-9">
-          {pending && <Spinner data-icon="inline-start" aria-hidden />}
+      <div>
+        <Button type="submit" className="h-11 md:h-9">
           保存并重启
         </Button>
-        <Pending pending={pending} message={message}>
-          写入 subpool.conf，重启中…
-        </Pending>
       </div>
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>保存并重启 subpool？</AlertDialogTitle>
-            <AlertDialogDescription>
-              只改这一栏的设置，订阅和监听不动。重启要重新拉订阅，代理会断开几秒到十几秒，正在用代理的源这一次可能失败；整点刚过时别重启。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setOpen(false)
-                if (form.current) {
-                  const data = new FormData(form.current)
-                  startTransition(() => action(data))
-                }
-              }}
-            >
-              保存并重启
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ActionDialog
+        action={action}
+        title="保存并重启 subpool？"
+        description="只改这一栏的设置，订阅和监听不动。重启要重新拉订阅，代理会断开几秒到十几秒，正在用代理的源这一次可能失败；整点刚过时别重启。"
+        confirm="保存并重启"
+        busy="正在写入 subpool.conf 并重启"
+        wait="重启后等节点通过健康检测，通常 10 到 30 秒"
+        onConfirm={() => {
+          const data = new FormData(form.current!)
+          action.run(() => saveSubpool(data))
+        }}
+      />
     </form>
   )
 }
@@ -1053,24 +1153,27 @@ export function Subscriptions({
   rows: SubscriptionRow[]
   checking: boolean // subpool just started: its first health checks are still running
 }) {
-  const [message, action, pending] = useActionState(editSubscription, null)
+  const action = useAction()
   // edit stays set after closing, so the dialog keeps its text while it fades out
   const [edit, setEdit] = useState<SubscriptionEdit | null>(null)
-  const [open, setOpen] = useState(false)
+  const [bad, setBad] = useState(false) // the URL typed in the dialog isn't one
   const url = useRef<HTMLInputElement>(null)
   const ask = (e: SubscriptionEdit) => {
     setEdit(e)
-    setOpen(true)
+    setBad(false)
+    action.ask()
   }
   const send = () => {
     if (!edit) return
+    const link = url.current?.value.trim() ?? ""
+    if (edit.op !== "delete" && !/^https?:\/\/\S+$/.test(link))
+      return setBad(true)
     const form = new FormData()
     form.set("op", edit.op)
     form.set("index", String(edit.index))
     form.set("label", edit.label)
-    form.set("url", url.current?.value ?? "")
-    setOpen(false)
-    startTransition(() => action(form))
+    form.set("url", link)
+    action.run(() => editSubscription(form))
   }
   return (
     <>
@@ -1145,7 +1248,6 @@ export function Subscriptions({
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={pending}
                         onClick={() =>
                           ask({ op: "replace", index: i, label: r.label })
                         }
@@ -1155,7 +1257,7 @@ export function Subscriptions({
                       <Button
                         variant="ghost"
                         size="sm"
-                        disabled={pending || rows.length < 2}
+                        disabled={rows.length < 2}
                         className="text-destructive hover:text-destructive"
                         onClick={() =>
                           ask({ op: "delete", index: i, label: r.label })
@@ -1171,74 +1273,71 @@ export function Subscriptions({
           })}
         </TableBody>
       </Table>
-      <div className="flex flex-wrap items-center gap-3 px-4 pt-2 pb-2 sm:px-6">
+      <div className="px-4 pt-2 pb-2 sm:px-6">
         <Button
           variant="outline"
-          disabled={pending}
           className="h-11 md:h-9"
           onClick={() => ask({ op: "add", index: -1, label: "" })}
         >
           添加订阅
         </Button>
-        <Pending pending={pending} message={message}>
-          {edit?.op === "delete"
-            ? "写入 subpool.conf，重启中…"
-            : "先试着打开链接，再写入并重启…"}
-        </Pending>
       </div>
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              send()
-            }}
-            className="contents"
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {edit?.op === "add"
-                  ? "添加订阅"
-                  : edit?.op === "replace"
-                    ? `替换订阅 ${edit.index + 1}`
-                    : `删除订阅 ${(edit?.index ?? 0) + 1}？`}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {edit?.op === "delete"
-                  ? `${edit.label} 的节点会从代理池里去掉。`
-                  : edit?.op === "replace"
-                    ? `换掉 ${edit.label}。保存前会先试着打开新链接，打不开就不保存。`
-                    : "保存前会先试着打开这个链接，打不开就不保存。"}
-                写入 subpool.conf 后重启
-                subpool，代理会断开几秒；整点刚过时别改。
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            {edit?.op !== "delete" && (
-              <Input
-                ref={url}
-                key={`${edit?.op}-${edit?.index}`}
-                type="url"
-                required
-                placeholder="https://…"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                aria-label="订阅链接"
-                className="h-11 font-mono md:h-9"
-              />
+      <ActionDialog
+        action={action}
+        title={
+          edit?.op === "add"
+            ? "添加订阅"
+            : edit?.op === "replace"
+              ? `替换订阅 ${edit.index + 1}`
+              : `删除订阅 ${(edit?.index ?? 0) + 1}？`
+        }
+        description={
+          <>
+            {edit?.op === "delete"
+              ? `${edit.label} 的节点会从代理池里去掉。`
+              : edit?.op === "replace"
+                ? `换掉 ${edit.label}。保存前会先试着打开新链接，打不开就不保存。`
+                : "保存前会先试着打开这个链接，打不开就不保存。"}
+            写入 subpool.conf 后重启 subpool，代理会断开几秒；整点刚过时别改。
+          </>
+        }
+        confirm={edit?.op === "delete" ? "删除并重启" : "保存并重启"}
+        destructive={edit?.op === "delete"}
+        busy={
+          edit?.op === "delete"
+            ? "正在删除订阅并重启 subpool"
+            : "正在试开链接，写入并重启 subpool"
+        }
+        wait={
+          edit?.op === "delete"
+            ? "重启后等节点通过健康检测，通常 10 到 30 秒"
+            : "先试着打开链接（最多 15 秒），再重启、等节点通过健康检测，通常 20 到 50 秒"
+        }
+        onConfirm={send}
+      >
+        {edit?.op !== "delete" && (
+          <div className="flex flex-col gap-1.5">
+            <Input
+              ref={url}
+              key={`${edit?.op}-${edit?.index}`}
+              type="url"
+              placeholder="https://…"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              aria-label="订阅链接"
+              aria-invalid={bad || undefined}
+              onChange={() => setBad(false)}
+              className="h-11 font-mono md:h-9"
+            />
+            {bad && (
+              <p className="text-sm text-destructive">
+                要填 http(s) 开头的完整订阅链接
+              </p>
             )}
-            <AlertDialogFooter>
-              <AlertDialogCancel type="button">取消</AlertDialogCancel>
-              <AlertDialogAction
-                type="submit"
-                variant={edit?.op === "delete" ? "destructive" : "default"}
-              >
-                {edit?.op === "delete" ? "删除并重启" : "保存并重启"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
+          </div>
+        )}
+      </ActionDialog>
     </>
   )
 }

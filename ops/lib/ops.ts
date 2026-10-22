@@ -395,6 +395,11 @@ export type SpiderConfig = {
   }
 }
 
+/** A server action's answer, shown in the dialog that ran it; ok: it did what was asked. */
+export type Reply = { ok: boolean; text: string }
+export const done = (text: string): Reply => ({ ok: true, text })
+export const failed = (text: string): Reply => ({ ok: false, text })
+
 // Saved in ops.setting by `repair.py settings`; system is the prompt template with its placeholders.
 export const REPAIR_LIMITS = [
   "daily",

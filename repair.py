@@ -3,7 +3,8 @@
 
 每轮结束 task.py 调 after_round():
   1. 进行中的任务: 应用后连续 2 轮正常 → 已恢复; 没等到修复源自己好了 → 自行恢复
-  2. 最近两轮都失败 (或条数都偏低) 的源开任务, 一段连续失败只开一个。按错误文本分流:
+  2. 最近两轮都失败 (或条数都偏低) 的源开任务, 一段连续失败只开一个; 任务因为模型接口出错、超时或中断而失败的,
+     下一轮重开, 最多 RETRIES 次。按错误文本分流:
      代理、超时、连不上、5xx、403/429 是运维问题, 不调模型; 浏览器类和用代理的源交给人;
      其余 (返回空、解析出错、条数偏低) 交给模型, 24 小时内最多 daily 个
   3. 模型只有五个工具: 读本源目录的文件、看试抓时的 HTTP 响应、抓一个公网 https 地址、提交补丁 (平台在沙箱里试抓并检查, 最多 3 次)、
@@ -15,7 +16,7 @@
 
 在容器里跑:
   python repair.py run <key>              手动让 AI 分析一个源 (要 root: 沙箱要切到 nobody)
-  python repair.py approve <id> --by 名字  应用补丁并立即跑一次 (用 -u 1000:1000 跑, 文件归属不变)
+  python repair.py approve <id> --by 名字  应用补丁并立即跑一次 (用 -u 1000:1000 跑, 文件归属不变); 没做成时退出码非 0
   python repair.py reject <id> --by 名字
   python repair.py revert <id> --by 名字   改回应用之前的文件
   python repair.py list
@@ -65,6 +66,7 @@ RANGES = {"daily": (0, 48, "每天最多几个任务"), "max_turns": (4, 60, "�
 S = dict(DEFAULTS)  # 当前生效的设置, load_settings() 更新
 VERIFY_SECONDS = 40  # 批准后立即跑一次的上限: 运维页的请求 60 秒就断
 ACTIVE = ["analyzing", "awaiting_review", "observing"]
+RETRIES = 2  # 失败 (failed) 的任务下一轮重开, 一段连续失败最多重开几次
 NOBODY = 65534
 # 补丁新加的 import 只能是这些 (含子模块); 别的一律交给人
 SAFE_IMPORTS = {"curl_cffi", "requests", "httpx", "pyquery", "lxml", "bs4", "parsel", "json", "re", "time",
@@ -389,12 +391,16 @@ def after_round(cur, round_at):
         normal = usual(runs)
         if len(runs) < 2 or runs[0]["round_at"] != round_at or not all(is_bad(r, normal) for r in runs[:2]):
             continue
-        # 一段连续失败只开一个任务: 上次正常之后开过就不再开 (人可以在运维页手动再让 AI 分析)
+        # 一段连续失败只开一个任务: 上次正常之后开过就不再开 (人可以在运维页手动再让 AI 分析);
+        # 失败的任务没有结论 (模型接口出错、超时、分析中断), 不算, 最多重开 RETRIES 次
         last_ok = next((r["round_at"] for r in runs if r["status"] == "ok" and not is_bad(r, normal)), 0)
-        cur.execute("SELECT 1 FROM ops.repair WHERE source = %s AND created_at > %s", (key, last_ok))
-        if cur.fetchone():
+        cur.execute("SELECT state FROM ops.repair WHERE source = %s AND created_at > %s", (key, last_ok))
+        states = [state for state, in cur.fetchall()]
+        if any(state != "failed" for state in states) or len(states) > RETRIES:
             continue
         route = triage(spec, runs[0], normal)
+        if states:
+            route = (*route[:2], f"{route[2]} (之前 {len(states)} 个任务失败, 重开第 {len(states)} 次)")
         if route[0] == "structural":
             if budget <= 0:
                 continue
@@ -636,7 +642,7 @@ class Agent:
                 messages.append({"role": "user", "content": FINAL})
             reply = chat([m if m["role"] != "tool" or i >= len(messages) - 8 else  # 较早的工具结果截短
                           {**m, "content": m["content"][:800] + "\n…(较早的结果, 已截短)"}
-                          for i, m in enumerate(messages)], tools=not final)
+                          for i, m in enumerate(messages)], self.until, tools=not final)
             self.tokens += (reply.get("usage") or {}).get("total_tokens", 0)
             message = reply["choices"][0]["message"]
             if final:
@@ -887,22 +893,29 @@ def list_models():
         return [], redact(f"{type(err).__name__}: {err}", 200)
 
 
-def chat(messages, tools=True):
+def chat(messages, until, tools=True):
+    """调一次模型。超时、连不上、5xx、429 和没有 message 的回复隔 10、30、60 秒重试;
+    别的 4xx 重试也一样, 直接报错。连重试在内不超过任务的 until 之后 4 分钟 (每轮的任务要在下一轮前结束)"""
     body = {"model": S["model"], "messages": messages, "max_tokens": 8000} | ({"tools": TOOLS} if tools else {})
     url, key = f"{S['api_base']}/chat/completions", api_key()[1]
-    error = None
-    for attempt in range(3):
+    stop, error = until + 240, None
+    for wait in (10, 30, 60, None):
         try:
-            res = requests.post(url, headers={"Authorization": f"Bearer {key}"}, timeout=240, json=body)
+            res = requests.post(url, headers={"Authorization": f"Bearer {key}"}, json=body,
+                                timeout=max(30, min(240, stop - time.time())))
+            if res.status_code == 200:
+                reply = res.json()
+                if reply["choices"][0]["message"]:
+                    return reply
+            error = f"HTTP {res.status_code}: {res.text[:200]}"
+            if res.status_code not in (200, 429) and res.status_code < 500:
+                break
         except Exception as err:
             error = f"{type(err).__name__}: {err}"
-        else:
-            if res.status_code == 200:
-                return res.json()
-            error = f"HTTP {res.status_code}: {res.text[:200]}"
-            if res.status_code < 500 and res.status_code != 429:
-                break
-        time.sleep(15 * (attempt + 1))
+        if wait is None or time.time() + wait + 30 > stop:
+            break
+        logger.warning(f"模型接口出错, {wait} 秒后重试: {redact(error, 200)}")
+        time.sleep(wait)
     raise RuntimeError(f"模型接口出错: {error}")
 
 
@@ -942,16 +955,17 @@ def apply(task, side):
 
 
 def approve(cur, task_id, by):
+    """返回 (做成了没有, 说明)"""
     task = get(cur, task_id)
     if not task or task["state"] != "awaiting_review" or not task["files"]:
-        return "这个任务现在不能批准"
+        return False, "这个任务现在不能批准"
     error = apply(task, "new")
     if error:
-        return error
+        return False, error
     if not move(cur, task_id, "awaiting_review", "observing", by, "批准并应用", applied_at=int(time.time())):
         apply(task, "old")
-        return "状态已经变了, 已改回"
-    return f"已应用到 sources/{task['source']}/。" + verify(cur, task_id, task["source"])
+        return False, "状态已经变了, 已改回"
+    return True, f"已应用到 sources/{task['source']}/。" + verify(cur, task_id, task["source"])
 
 
 def verify(cur, task_id, key):
@@ -988,16 +1002,17 @@ def verify(cur, task_id, key):
 
 
 def revert(cur, task_id, by):
+    """返回 (做成了没有, 说明)"""
     task = get(cur, task_id)
     if not task or not task["applied_at"] or task["state"] not in ("observing", "resolved", "needs_human"):
-        return "这个任务没有应用过, 或者已经撤销"
+        return False, "这个任务没有应用过, 或者已经撤销"
     error = apply(task, "old")
     if error:
-        return error
+        return False, error
     if not move(cur, task_id, task["state"], "reverted", by, "撤销补丁"):
         apply(task, "new")
-        return "状态已经变了, 已改回"
-    return f"sources/{task['source']}/ 已改回应用之前"
+        return False, "状态已经变了, 已改回"
+    return True, f"sources/{task['source']}/ 已改回应用之前"
 
 
 def main():
@@ -1050,9 +1065,13 @@ def main():
         sys.exit("要给任务 id")
     task_id = int(args.target)
     if args.command == "reject":
-        print("已驳回" if move(cur, task_id, "awaiting_review", "rejected", args.by, "驳回") else "这个任务现在不能驳回")
+        ok = move(cur, task_id, "awaiting_review", "rejected", args.by, "驳回")
+        text = "已驳回" if ok else "这个任务现在不能驳回"
     else:
-        print((approve if args.command == "approve" else revert)(cur, task_id, args.by))
+        ok, text = (approve if args.command == "approve" else revert)(cur, task_id, args.by)
+    if not ok:
+        sys.exit(text)  # 运维页按退出码区分做成没有
+    print(text)
 
 
 if __name__ == "__main__":

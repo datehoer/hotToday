@@ -7,6 +7,8 @@ import { refresh } from "next/cache"
 
 import { requireUser } from "@/lib/auth"
 import {
+  done,
+  failed,
   failure,
   getProxyStats,
   HOTTODAY,
@@ -16,6 +18,7 @@ import {
   SUBPOOL_DEFAULTS,
   SUBPOOL_FIELDS,
   SUBPOOL_STRATEGIES,
+  type Reply,
   type SubpoolKey,
 } from "@/lib/ops"
 
@@ -27,7 +30,7 @@ const lastLine = (e: unknown) => {
 
 // repair.py checks the values and writes ops.setting; this site only reads the database. A new key
 // goes to hotToday/.env instead (the container's env_file), which repair.py reads on every model call.
-export async function saveRepairSettings(_: string | null, form: FormData) {
+export async function saveRepairSettings(form: FormData): Promise<Reply> {
   const user = await requireUser()
   const settings = {
     model: String(form.get("model") ?? "").trim(),
@@ -39,7 +42,7 @@ export async function saveRepairSettings(_: string | null, form: FormData) {
   }
   const key = String(form.get("api_key") ?? "").trim()
   if (key && !/^[\w.~+/=:-]{8,256}$/.test(key))
-    return "没保存：密钥只能有字母、数字和 . _ ~ + / = : -"
+    return failed("没保存：密钥只能有字母、数字和 . _ ~ + / = : -")
   try {
     const { stdout } = await run(
       "/usr/bin/docker",
@@ -60,7 +63,8 @@ export async function saveRepairSettings(_: string | null, form: FormData) {
     )
     let reply = stdout.trim().split("\n").at(-1) || "完成"
     refresh()
-    if (key && !reply.startsWith("没保存")) {
+    if (reply.startsWith("没保存")) return failed(reply)
+    if (key) {
       // the settings above are saved by now, so a failure here only concerns the key
       try {
         const file = `${HOTTODAY}/.env`
@@ -76,12 +80,12 @@ export async function saveRepairSettings(_: string | null, form: FormData) {
         await rename(`${file}.tmp`, file)
         reply += "；密钥已写进 .env"
       } catch (e) {
-        reply += `；密钥没写进 .env：${lastLine(e)}`
+        return failed(`${reply}；密钥没写进 .env：${lastLine(e)}`)
       }
     }
-    return reply
+    return done(reply)
   } catch (e) {
-    return `没保存：${lastLine(e)}`
+    return failed(`没保存：${lastLine(e)}`)
   }
 }
 
@@ -124,7 +128,7 @@ const poolNow = (now: Awaited<ReturnType<typeof getProxyStats>>) =>
 
 // Rewrites only the tuning keys in subpool.conf (every other line, including the subscriptions and
 // the listener's password, stays as it is), then restarts subpool.service.
-export async function saveSubpool(_: string | null, form: FormData) {
+export async function saveSubpool(form: FormData): Promise<Reply> {
   await requireUser()
   const values = {} as Record<SubpoolKey, string>
   for (const key of Object.keys(SUBPOOL_DEFAULTS) as SubpoolKey[])
@@ -135,10 +139,10 @@ export async function saveSubpool(_: string | null, form: FormData) {
       +values[key] < range[0] ||
       +values[key] > range[1]
     )
-      return `${label}要填 ${range[0]} 到 ${range[1]} 的整数`
-  if (!(values.s in SUBPOOL_STRATEGIES)) return "调度策略不对"
+      return failed(`${label}要填 ${range[0]} 到 ${range[1]} 的整数`)
+  if (!(values.s in SUBPOOL_STRATEGIES)) return failed("调度策略不对")
   if (!/^https?:\/\/[^\s#]+(#[\w=&.-]+)?$/.test(values.c))
-    return "检测地址要是 http(s) 地址，可以带 #expect=200"
+    return failed("检测地址要是 http(s) 地址，可以带 #expect=200")
 
   try {
     const text = await readFile(/*turbopackIgnore: true*/ SUBPOOL_CONF, "utf8")
@@ -156,12 +160,12 @@ export async function saveSubpool(_: string | null, form: FormData) {
         lines.splice(lines.at(-1) === "" ? -1 : lines.length, 0, `${key}=${v}`)
       else lines[at] = `${key}=${v}`
     }
-    if (!changed.length) return "没有改动"
+    if (!changed.length) return done("没有改动，没重启")
     const now = await restartSubpool(text, lines.join("\n"))
-    if (!now) return "subpool 用新设置起不来，已改回原来的设置并重启"
-    return `已保存（${changed.join("、")}）并重启，${poolNow(now)}`
+    if (!now) return failed("subpool 用新设置起不来，已改回原来的设置并重启")
+    return done(`已保存（${changed.join("、")}）并重启，${poolNow(now)}`)
   } catch (e) {
-    return `没做成：${lastLine(e)}`
+    return failed(`没做成：${lastLine(e)}`)
   }
 }
 
@@ -186,17 +190,17 @@ async function tryOpen(url: string) {
 
 // Subscription URLs carry access tokens, so the page never has them: an edit names its line by
 // position plus the masked label the page showed, and a list that changed since then is left alone.
-export async function editSubscription(_: string | null, form: FormData) {
+export async function editSubscription(form: FormData): Promise<Reply> {
   await requireUser()
   const op = String(form.get("op") ?? "")
   const index = Number(form.get("index") ?? -1)
   const url = String(form.get("url") ?? "").trim()
-  if (!["add", "replace", "delete"].includes(op)) return "参数不对"
+  if (!["add", "replace", "delete"].includes(op)) return failed("参数不对")
   if (op !== "delete") {
     if (!/^https?:\/\/\S+$/.test(url) || !URL.canParse(url))
-      return "要填 http(s) 开头的订阅链接"
+      return failed("要填 http(s) 开头的订阅链接")
     const problem = await tryOpen(url)
-    if (problem) return `没保存：${problem}`
+    if (problem) return failed(`没保存：${problem}`)
   }
   try {
     const text = await readFile(/*turbopackIgnore: true*/ SUBPOOL_CONF, "utf8")
@@ -210,13 +214,13 @@ export async function editSubscription(_: string | null, form: FormData) {
         maskSubscription(line.slice(line.indexOf("=") + 1).trim()) !==
           form.get("label")
       )
-        return "订阅列表变了，刷新页面再试"
+        return failed("订阅列表变了，刷新页面再试")
     }
     if (
       op === "delete" &&
       at.length + lines.filter((l) => key(l) === "f").length < 2
     )
-      return "至少要留一个订阅"
+      return failed("至少要留一个订阅")
     if (op === "replace") lines[at[index]] = `u=${url}`
     else if (op === "delete") lines.splice(at[index], 1)
     else
@@ -226,17 +230,17 @@ export async function editSubscription(_: string | null, form: FormData) {
         `u=${url}`
       )
     const now = await restartSubpool(text, lines.join("\n"))
-    if (!now) return "subpool 用新的订阅起不来，已改回原来的订阅并重启"
-    const done = { add: "已添加", replace: "已替换", delete: "已删除" }[op]
+    if (!now) return failed("subpool 用新的订阅起不来，已改回原来的订阅并重启")
+    const did = { add: "已添加", replace: "已替换", delete: "已删除" }[op]
     // subpool reports subscriptions in the same order: u= lines, then f= lines
     const sub =
       op !== "delete" &&
       now.stats?.subscribe.sources?.[op === "add" ? at.length : index]
-    if (!sub) return `${done}并重启，${poolNow(now)}`
+    if (!sub) return done(`${did}并重启，${poolNow(now)}`)
     return sub.error
-      ? `${done}并重启，但这个订阅拉取失败：${sub.error}`
-      : `${done}并重启，这个订阅拉到 ${sub.nodes} 个节点，正在检测`
+      ? failed(`${did}并重启，但这个订阅拉取失败：${sub.error}`)
+      : done(`${did}并重启，这个订阅拉到 ${sub.nodes} 个节点，正在检测`)
   } catch (e) {
-    return `没做成：${lastLine(e)}`
+    return failed(`没做成：${lastLine(e)}`)
   }
 }

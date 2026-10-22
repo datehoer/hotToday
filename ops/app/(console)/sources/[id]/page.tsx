@@ -486,7 +486,14 @@ function RepairCard({
       },
     })
   if (broken && !(r && OPEN.includes(r.state)))
-    ops.push({ op: "run", label: r ? "再让 AI 分析" : "让 AI 分析" })
+    ops.push({
+      op: "run",
+      label: r ? "再让 AI 分析" : "让 AI 分析",
+      confirm: {
+        title: "让 AI 分析这个源？",
+        text: "模型读这个源的文件和最近几轮的结果，在沙箱里试抓，可能提交补丁（要你批准才写进去）。算进「每天最多几个任务」，几分钟内出结果。",
+      },
+    })
   const by = r?.log[0]?.by
   const link = (u: string | null) => (u && /^https?:\/\//.test(u) ? u : null)
 
