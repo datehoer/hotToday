@@ -25,8 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { getRound, phase, type Run } from "@/lib/ops"
-import { cn, fmtMs, fmtNum, fmtTime } from "@/lib/utils"
+import { getRound, getT, phase, type Run } from "@/lib/ops"
+import { cn, fmtNum } from "@/lib/utils"
 
 type Props = { params: Promise<{ at: string }> }
 
@@ -37,7 +37,10 @@ const load = async (params: Props["params"]) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await load(params)
-  return { title: data ? `${fmtTime(data.round.started_at)} 这一轮` : "运行" }
+  const t = await getT()
+  if (!data) return { title: t("Rounds", "运行") }
+  const at = t.time(data.round.started_at)
+  return { title: t(`${at} round`, `${at} 这一轮`) }
 }
 
 // Failed sources first, then in the order they finished.
@@ -48,7 +51,9 @@ export default async function RoundDetail({ params }: Props) {
   const data = await load(params)
   if (!data) notFound()
   const { round, runs } = data
-  const running = phase(round).endsWith("中")
+  const t = await getT()
+  const running = !["done", "unfinished"].includes(phase(round))
+  const [start, end] = [round.started_at, round.finished_at]
   const rows = runs.toSorted(
     (a, b) => rank(a) - rank(b) || a.finished_at - b.finished_at
   )
@@ -56,7 +61,11 @@ export default async function RoundDetail({ params }: Props) {
   return (
     <>
       <PageHeader
-        crumbs={[["运维", "/"], ["运行", "/runs"], [fmtTime(round.started_at)]]}
+        crumbs={[
+          [t("Ops", "运维"), "/"],
+          [t("Rounds", "运行"), "/runs"],
+          [t.time(start)],
+        ]}
         updated={round.finished_at}
       />
       {running && <AutoRefresh seconds={15} />}
@@ -64,33 +73,46 @@ export default async function RoundDetail({ params }: Props) {
         <PageTitle
           title={
             <>
-              {fmtTime(round.started_at)} 这一轮
+              {t(`${t.time(start)} round`, `${t.time(start)} 这一轮`)}
               <PhaseBadge round={round} />
             </>
           }
         >
-          {round.finished_at != null
-            ? `${fmtTime(round.started_at)} 开始，${fmtTime(round.finished_at)} 结束，用时 ${fmtMs((round.finished_at - round.started_at) * 1000)}。`
-            : `${fmtTime(round.started_at)} 开始，${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} 个源跑完。`}
+          {end != null
+            ? t(
+                `Started ${t.time(start)}, finished ${t.time(end)}, took ${t.ms((end - start) * 1000)}.`,
+                `${t.time(start)} 开始，${t.time(end)} 结束，用时 ${t.ms((end - start) * 1000)}。`
+              )
+            : t(
+                `Started ${t.time(start)}; ${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} sources done.`,
+                `${t.time(start)} 开始，${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} 个源跑完。`
+              )}
         </PageTitle>
         <RoundStats round={round} runs={runs} />
         <RoundParts round={round} runs={runs} />
         <Card className="py-2">
           <CardHeader className="pt-4">
-            <CardTitle>各源结果</CardTitle>
+            <CardTitle>{t("Per source", "各源结果")}</CardTitle>
             <CardDescription>
-              没写入的排在前面，其余按跑完的先后
+              {t(
+                "Sources that wrote nothing first, the rest in the order they finished",
+                "没写入的排在前面，其余按跑完的先后"
+              )}
             </CardDescription>
           </CardHeader>
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4 sm:pl-6">源</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>条数</TableHead>
-                <TableHead className="hidden sm:table-cell">耗时</TableHead>
+                <TableHead className="pl-4 sm:pl-6">
+                  {t("Source", "源")}
+                </TableHead>
+                <TableHead>{t("Status", "状态")}</TableHead>
+                <TableHead>{t("Items", "条数")}</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  {t("Took", "耗时")}
+                </TableHead>
                 <TableHead className="hidden pr-4 sm:pr-6 md:table-cell">
-                  说明
+                  {t("Details", "说明")}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -115,7 +137,7 @@ export default async function RoundDetail({ params }: Props) {
                     {fmtNum(r.items)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground tabular-nums sm:table-cell">
-                    {fmtMs(r.ms)}
+                    {t.ms(r.ms)}
                   </TableCell>
                   <TableCell className="hidden w-full max-w-0 pr-4 sm:pr-6 md:table-cell">
                     <span

@@ -26,31 +26,40 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { count, type Translate } from "@/lib/i18n"
 import {
   cause,
+  CAUSE,
   getActiveRepairs,
   getBoard,
+  getT,
   phase,
+  PHASE,
   REPAIR_STATE,
+  type Cause,
   type Repair,
   type Source,
 } from "@/lib/ops"
-import { fmtHour, fmtMs, fmtSince, fmtTime } from "@/lib/utils"
+import { fmtHour } from "@/lib/utils"
 
-const ICONS: Record<string, typeof RiPlugLine> = {
-  代理连不上: RiPlugLine,
-  返回空数据: RiInbox2Line,
-  超时: RiTimeLine,
+const ICONS: Partial<Record<Cause, typeof RiPlugLine>> = {
+  proxy: RiPlugLine,
+  empty: RiInbox2Line,
+  timeout: RiTimeLine,
 }
 
 export default async function Overview() {
+  const t = await getT()
   const { latest, running, progress, rounds, sources } = await getBoard()
   if (!latest) {
     return (
       <>
-        <PageHeader crumbs={[["概况"]]} />
+        <PageHeader crumbs={[[t("Overview", "概况")]]} />
         <p className="p-6 text-muted-foreground">
-          还没有运行记录。task.py 下一次整点运行后这里就有数据了。
+          {t(
+            "No rounds recorded yet. Data shows up here after task.py's next hourly run.",
+            "还没有运行记录。task.py 下一次整点运行后这里就有数据了。"
+          )}
         </p>
       </>
     )
@@ -67,6 +76,8 @@ export default async function Overview() {
   const isNew = (s: Source) => s.history.at(-2)?.status === "ok"
   const fresh = failing.filter(isNew)
   const groups = Map.groupBy(failing, (s) => cause(s.run)!)
+  const round = (r: { started_at: number }) =>
+    t(`${t.time(r.started_at)} round`, `${t.time(r.started_at)} 这一轮`)
   const slowest = sources
     .filter((s) => s.run.status !== "disabled" && s.run.ms != null)
     .toSorted((a, b) => b.run.ms! - a.run.ms!)
@@ -82,19 +93,27 @@ export default async function Overview() {
   return (
     <>
       <PageHeader
-        crumbs={[["运维", "/"], ["概况"]]}
+        crumbs={[[t("Ops", "运维"), "/"], [t("Overview", "概况")]]}
         updated={latest.finished_at}
       />
       {running && <AutoRefresh seconds={15} />}
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title="概况">
-          {fmtTime(latest.started_at)} 这一轮{phase(latest)}
-          {total != null && `，用时 ${fmtMs(total)}`}。
+        <PageTitle title={t("Overview", "概况")}>
+          {t(
+            `The ${t.time(latest.started_at)} round ${phase(latest) === "done" ? "finished" : "didn't finish"}${total != null ? ` in ${t.ms(total)}` : ""}. `,
+            `${t.time(latest.started_at)} 这一轮${PHASE[phase(latest)][1]}${total != null ? `，用时 ${t.ms(total)}` : ""}。`
+          )}
           {failing.length === 0
-            ? "所有源都写入了。"
+            ? t("Every source wrote data.", "所有源都写入了。")
             : fresh.length
-              ? `${failing.length} 个源没写入，其中 ${fresh.length} 个是这一轮新出现的。`
-              : `${failing.length} 个源没写入，都是之前就坏的。`}
+              ? t(
+                  `${count(failing.length, "source")} wrote nothing; ${fresh.length} of them ${fresh.length === 1 ? "is" : "are"} new this round.`,
+                  `${failing.length} 个源没写入，其中 ${fresh.length} 个是这一轮新出现的。`
+                )
+              : t(
+                  `${count(failing.length, "source")} wrote nothing; ${failing.length === 1 ? "it was" : "all of them were"} broken before this round.`,
+                  `${failing.length} 个源没写入，都是之前就坏的。`
+                )}
         </PageTitle>
 
         {running && (
@@ -102,16 +121,16 @@ export default async function Overview() {
             <CardContent className="flex flex-col gap-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">
-                  {fmtTime(running.started_at)} 这一轮{phase(running)}
+                  {t(
+                    `${round(running)}: ${PHASE[phase(running)][0].toLowerCase()}`,
+                    `${round(running)}${PHASE[phase(running)][1]}`
+                  )}
                 </span>
                 <span className="text-muted-foreground tabular-nums">
-                  {progress.length} / {running.sources} 个源跑完，
-                  {
-                    progress.filter(
-                      (r) => r.status === "empty" || r.status === "error"
-                    ).length
-                  }{" "}
-                  个没写入
+                  {t(
+                    `${progress.length} / ${running.sources} sources done, ${progress.filter((r) => r.status === "empty" || r.status === "error").length} wrote nothing`,
+                    `${progress.length} / ${running.sources} 个源跑完，${progress.filter((r) => r.status === "empty" || r.status === "error").length} 个没写入`
+                  )}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -136,14 +155,22 @@ export default async function Overview() {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_452px]">
           <Card>
             <CardHeader>
-              <CardTitle>最近 {rounds.length} 轮没写入的源</CardTitle>
+              <CardTitle>
+                {t(
+                  `Sources that wrote nothing, last ${count(rounds.length, "round")}`,
+                  `最近 ${rounds.length} 轮没写入的源`
+                )}
+              </CardTitle>
               <CardDescription>
-                每小时一轮，柱子越高坏的越多；点柱子看那一轮
+                {t(
+                  "One round an hour; the taller the bar, the more sources failed. Click a bar to open its round",
+                  "每小时一轮，柱子越高坏的越多；点柱子看那一轮"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
               <RoundBars
-                label="没写入的源"
+                label={t("Sources that wrote nothing", "没写入的源")}
                 color="var(--destructive)"
                 fade
                 data={rounds.map((r, i) => {
@@ -156,7 +183,7 @@ export default async function Overview() {
                   return {
                     key: String(r.started_at),
                     hour: fmtHour(r.started_at),
-                    title: `${fmtTime(r.started_at)} 这一轮`,
+                    title: round(r),
                     value,
                     tone: i === rounds.length - 1 ? "bad" : undefined,
                     href: `/runs/${r.started_at}`,
@@ -168,11 +195,17 @@ export default async function Overview() {
 
           <Card>
             <CardHeader>
-              <CardTitle>需要处理</CardTitle>
+              <CardTitle>{t("Needs attention", "需要处理")}</CardTitle>
               <CardDescription>
                 {failing.length
-                  ? `这一轮没写入的 ${failing.length} 个源，按原因分组`
-                  : "这一轮所有源都写入了"}
+                  ? t(
+                      `The ${count(failing.length, "source")} that wrote nothing this round, by cause`,
+                      `这一轮没写入的 ${failing.length} 个源，按原因分组`
+                    )
+                  : t(
+                      "Every source wrote data this round",
+                      "这一轮所有源都写入了"
+                    )}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -184,15 +217,14 @@ export default async function Overview() {
                       href="/repairs"
                       className="flex-1 font-medium hover:underline"
                     >
-                      AI 修复
+                      {t("AI repair", "AI 修复")}
                     </Link>
                     {repairs.some((r) => r.state === "awaiting_review") && (
                       <Badge>
-                        {
-                          repairs.filter((r) => r.state === "awaiting_review")
-                            .length
-                        }{" "}
-                        个待 review
+                        {t(
+                          `${repairs.filter((r) => r.state === "awaiting_review").length} awaiting review`,
+                          `${repairs.filter((r) => r.state === "awaiting_review").length} 个待 review`
+                        )}
                       </Badge>
                     )}
                   </div>
@@ -200,15 +232,15 @@ export default async function Overview() {
                     <SourceLink
                       key={r.id}
                       s={sources.find((s) => s.id === r.source)!}
-                      note={repairNote(r)}
+                      note={repairNote(t, r)}
                     />
                   ))}
                 </div>
               )}
-              {[...groups].map(([label, list], gi) => {
-                const Icon = ICONS[label] ?? RiCloseCircleLine
+              {[...groups].map(([why, list], gi) => {
+                const Icon = ICONS[why] ?? RiCloseCircleLine
                 const where =
-                  label === "代理连不上"
+                  why === "proxy"
                     ? list
                         .map((s) =>
                           s.run.error?.match(/connect to (\S+) port (\d+)/)
@@ -216,20 +248,29 @@ export default async function Overview() {
                         .find(Boolean)
                     : null
                 return (
-                  <div key={label} className="flex flex-col gap-1">
+                  <div key={why} className="flex flex-col gap-1">
                     {(gi > 0 || repairs.length > 0) && (
                       <Separator className="mb-3" />
                     )}
                     <div className="flex items-center gap-2">
                       <Icon className="size-4 text-destructive" />
-                      <span className="flex-1 font-medium">{label}</span>
-                      <Badge variant="destructive">{list.length} 个源</Badge>
+                      <span className="flex-1 font-medium">
+                        {t(...CAUSE[why])}
+                      </span>
+                      <Badge variant="destructive">
+                        {t(count(list.length, "source"), `${list.length} 个源`)}
+                      </Badge>
                     </div>
                     {where && (
                       <Link
                         href="/status"
                         className="font-mono text-xs text-muted-foreground hover:underline"
-                      >{`代理端口 ${where[2]} 拒绝连接 · 看代理状态`}</Link>
+                      >
+                        {t(
+                          `Proxy port ${where[2]} refused the connection · proxy status`,
+                          `代理端口 ${where[2]} 拒绝连接 · 看代理状态`
+                        )}
+                      </Link>
                     )}
                     {list
                       .sort((a, b) => (a.lastOk ?? 0) - (b.lastOk ?? 0))
@@ -237,7 +278,11 @@ export default async function Overview() {
                         <SourceLink
                           key={s.id}
                           s={s}
-                          note={isNew(s) ? "这一轮开始" : fmtSince(s.lastOk)}
+                          note={
+                            isNew(s)
+                              ? t("since this round", "这一轮开始")
+                              : t.since(s.lastOk)
+                          }
                         />
                       ))}
                   </div>
@@ -250,16 +295,21 @@ export default async function Overview() {
                   )}
                   <div className="flex items-center gap-2">
                     <RiInbox2Line className="size-4 text-amber-600" />
-                    <span className="flex-1 font-medium">条数偏低</span>
+                    <span className="flex-1 font-medium">
+                      {t("Low count", "条数偏低")}
+                    </span>
                     <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
-                      {low.length} 个源
+                      {t(count(low.length, "source"), `${low.length} 个源`)}
                     </Badge>
                   </div>
                   {low.map((s) => (
                     <SourceLink
                       key={s.id}
                       s={s}
-                      note={`${s.run.items} 条，平时 ${s.usual} 条`}
+                      note={t(
+                        `${count(s.run.items ?? 0, "item")}, usually ${s.usual}`,
+                        `${s.run.items} 条，平时 ${s.usual} 条`
+                      )}
                     />
                   ))}
                 </div>
@@ -271,19 +321,22 @@ export default async function Overview() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>每轮新增标题</CardTitle>
+              <CardTitle>{t("New titles per round", "每轮新增标题")}</CardTitle>
               <CardDescription>
-                清洗后第一次出现的标题；点柱子看那一轮
+                {t(
+                  "Titles seen for the first time after cleaning; click a bar to open its round",
+                  "清洗后第一次出现的标题；点柱子看那一轮"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <RoundBars
-                label="新增标题"
+                label={t("New titles", "新增标题")}
                 fade
                 data={rounds.map((r) => ({
                   key: String(r.started_at),
                   hour: fmtHour(r.started_at),
-                  title: `${fmtTime(r.started_at)} 这一轮`,
+                  title: round(r),
                   value: r.new_titles ?? 0,
                   href: `/runs/${r.started_at}`,
                 }))}
@@ -292,9 +345,12 @@ export default async function Overview() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>每轮用时</CardTitle>
+              <CardTitle>{t("Time per round", "每轮用时")}</CardTitle>
               <CardDescription>
-                抓取、清洗、向量化各用了多久；点柱子看那一轮
+                {t(
+                  "How long crawling, cleaning and embedding took; click a bar to open its round",
+                  "抓取、清洗、向量化各用了多久；点柱子看那一轮"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -303,7 +359,7 @@ export default async function Overview() {
                 data={rounds.map((r) => ({
                   key: String(r.started_at),
                   hour: fmtHour(r.started_at),
-                  title: `${fmtTime(r.started_at)} 这一轮`,
+                  title: round(r),
                   href: `/runs/${r.started_at}`,
                   ...Object.fromEntries(
                     STAGES.map((s) => [s.key, r[s.key] ?? 0])
@@ -317,20 +373,31 @@ export default async function Overview() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card size="sm">
             <CardHeader>
-              <CardTitle>这一轮最慢的 {slowest.length} 个源</CardTitle>
+              <CardTitle>
+                {t(
+                  `The ${slowest.length} slowest sources this round`,
+                  `这一轮最慢的 ${slowest.length} 个源`
+                )}
+              </CardTitle>
               <CardDescription>
-                一个源最多跑 5 分钟（json 30 秒、rss 25 秒），慢的拖长整轮
+                {t(
+                  "A source may run up to 5 min (json 30 s, rss 25 s); slow ones stretch the whole round",
+                  "一个源最多跑 5 分钟（json 30 秒、rss 25 秒），慢的拖长整轮"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <BarList
-                format={fmtMs}
+                format={t.ms}
                 rows={slowest.map((s) => ({
                   key: s.id,
                   label: s.name,
                   value: s.run.ms ?? 0,
                   href: `/sources/${s.id}`,
-                  note: s.run.status === "ok" ? undefined : cause(s.run)!,
+                  note:
+                    s.run.status === "ok"
+                      ? undefined
+                      : t(...CAUSE[cause(s.run)!]),
                 }))}
               />
             </CardContent>
@@ -347,15 +414,21 @@ export default async function Overview() {
   )
 }
 
-// What a task in the 需要处理 card is waiting for, or how it ended.
-function repairNote(r: Repair) {
+// What a task in the "needs attention" card is waiting for, or how it ended.
+function repairNote(t: Translate, r: Repair) {
   if (r.state === "observing")
     return r.verify?.status === "ok"
-      ? `观察中 · 批准后 ${r.verify.items} 条`
+      ? t(
+          `Observing · ${count(r.verify.items ?? 0, "item")} after approval`,
+          `观察中 · 批准后 ${r.verify.items} 条`
+        )
       : r.verify
-        ? "观察中 · 批准后还是没写入"
-        : "观察中"
-  return REPAIR_STATE[r.state]
+        ? t(
+            "Observing · still nothing written after approval",
+            "观察中 · 批准后还是没写入"
+          )
+        : t(...REPAIR_STATE.observing)
+  return t(...REPAIR_STATE[r.state])
 }
 
 function SourceLink({ s, note }: { s: Source; note: string }) {

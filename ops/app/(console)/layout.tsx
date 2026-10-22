@@ -1,14 +1,14 @@
 import { AppSidebar } from "@/components/ops-client"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { requireUser } from "@/lib/auth"
-import { getBoard, nextRound, phase } from "@/lib/ops"
-import { fmtTime } from "@/lib/utils"
+import { getBoard, getT, nextRound, phase, PHASE } from "@/lib/ops"
 
 // Everything in (console) needs a login; /login lives outside it.
 export default async function ConsoleLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser()
+  const t = await getT()
   const { latest, running, progress, sources } = await getBoard()
   const round = running ?? latest
   const ok = running
@@ -24,13 +24,16 @@ export default async function ConsoleLayout({
         failing={failing}
         round={
           round && {
-            label: `${fmtTime(round.started_at)} 这一轮`,
-            state: running
-              ? `${phase(round)} ${progress.length}/${round.sources}`
-              : phase(round),
+            label: t(
+              `${t.time(round.started_at)} round`,
+              `${t.time(round.started_at)} 这一轮`
+            ),
+            state:
+              t(...PHASE[phase(round)]) +
+              (running ? ` ${progress.length}/${round.sources}` : ""),
             ok,
             total: round.sources,
-            next: fmtTime(nextRound(round)),
+            next: t.time(nextRound(round)),
           }
         }
       />

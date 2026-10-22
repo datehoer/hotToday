@@ -4,11 +4,13 @@ import { execFile } from "node:child_process"
 import { readdir, readFile } from "node:fs/promises"
 import net from "node:net"
 import { promisify } from "node:util"
+import { cookies } from "next/headers"
 import { connection } from "next/server"
 import pg from "pg"
 import { cache } from "react"
 
 import { requireUser } from "@/lib/auth"
+import { isLang, LANG_COOKIE, T } from "@/lib/i18n"
 
 pg.types.setTypeParser(pg.types.builtins.INT8, Number)
 const pool = new pg.Pool({ max: 4 })
@@ -51,6 +53,12 @@ async function query<T>(sql: string, args: unknown[] = []) {
   await requireUser()
   return (await pool.query(sql, args)).rows as T[]
 }
+
+/** The visitor's language as a translator (lib/i18n.ts): the "lang" cookie, English by default. */
+export const getT = cache(async () => {
+  const lang = (await cookies()).get(LANG_COOKIE)?.value
+  return T[isLang(lang) ? lang : "en"]
+})
 
 // The site is public: keep server addresses (the proxy's IP) out of error texts.
 const maskIp = (text: string) =>
@@ -131,8 +139,17 @@ export const getBoard = cache(async () => {
 })
 
 // Sources with no ok run in the loaded history: read the time of the newest snapshot in their own table.
+// A source that has never saved has no table (task.py makes it on the first save), and one missing
+// table would fail the whole query, and with it every page (the sidebar reads the board).
 async function fillLastOk(sources: Source[]) {
-  const ids = sources.map((s) => s.id).filter((id) => /^[a-z0-9_]+$/.test(id))
+  const named = sources.map((s) => s.id).filter((id) => /^[a-z0-9_]+$/.test(id))
+  if (!named.length) return
+  const ids = (
+    await query<{ id: string }>(
+      "select id from unnest($1::text[]) id where to_regclass(quote_ident(id)) is not null",
+      [named]
+    )
+  ).map((r) => r.id)
   if (!ids.length) return
   // Not "as id": ORDER BY would then sort by the alias instead of the table's id.
   const sql = ids
@@ -191,29 +208,50 @@ export async function getRounds(limit = 72) {
   return rounds
 }
 
-export function phase(r: Round) {
-  if (r.finished_at != null) return "已完成"
-  if (isDone(r)) return "没跑完"
+export type Phase =
+  "done" | "unfinished" | "crawling" | "cleaning" | "embedding"
+export const PHASE: Record<Phase, [string, string]> = {
+  done: ["Finished", "已完成"],
+  unfinished: ["Didn't finish", "没跑完"],
+  crawling: ["Crawling", "抓取中"],
+  cleaning: ["Cleaning", "清洗中"],
+  embedding: ["Embedding", "向量化中"],
+}
+
+export function phase(r: Round): Phase {
+  if (r.finished_at != null) return "done"
+  if (isDone(r)) return "unfinished"
   return r.crawl_ms == null
-    ? "抓取中"
+    ? "crawling"
     : r.etl_ms == null
-      ? "清洗中"
-      : "向量化中"
+      ? "cleaning"
+      : "embedding"
 }
 
 export const nextRound = (r: Round) =>
   Math.floor(r.started_at / 3600) * 3600 + 3600
 
-// Why a run wrote nothing, as a group label. 6666 is the port of config.PROXY in hotToday.
-export function cause(run: Run) {
-  if (run.status === "empty") return "返回空数据"
+// Why a run wrote nothing, as a group. 6666 is the port of config.PROXY in hotToday.
+export type Cause =
+  "empty" | "proxy" | "timeout" | "status" | "connect" | "error"
+export const CAUSE: Record<Cause, [string, string]> = {
+  empty: ["Empty response", "返回空数据"],
+  proxy: ["Proxy unreachable", "代理连不上"],
+  timeout: ["Timed out", "超时"],
+  status: ["Bad status code", "状态码异常"],
+  connect: ["Can't connect", "连不上"],
+  error: ["Error", "出错"],
+}
+
+export function cause(run: Run): Cause | null {
+  if (run.status === "empty") return "empty"
   if (run.status !== "error") return null
   const e = run.error ?? ""
-  if (/proxy|port 6666\b/i.test(e)) return "代理连不上"
-  if (/timed? ?out/i.test(e)) return "超时"
-  if (/status=\d{3}|HTTP \d{3}/i.test(e)) return "状态码异常"
-  if (/connect|resolve|reset|Empty reply/i.test(e)) return "连不上"
-  return "出错"
+  if (/proxy|port 6666\b/i.test(e)) return "proxy"
+  if (/timed? ?out/i.test(e)) return "timeout"
+  if (/status=\d{3}|HTTP \d{3}/i.test(e)) return "status"
+  if (/connect|resolve|reset|Empty reply/i.test(e)) return "connect"
+  return "error"
 }
 
 // AI repair tasks: hotToday's repair.py writes ops.repair (the table appears with its first task).
@@ -268,17 +306,17 @@ export type Repair = {
 }
 
 // The PRD's wording for each state.
-export const REPAIR_STATE: Record<RepairState, string> = {
-  analyzing: "分析中",
-  handed_off: "运维处理",
-  needs_human: "需要人工",
-  awaiting_review: "待 review",
-  observing: "观察中",
-  resolved: "已恢复",
-  rejected: "已驳回",
-  superseded: "已自行恢复",
-  failed: "失败",
-  reverted: "已撤销",
+export const REPAIR_STATE: Record<RepairState, [string, string]> = {
+  analyzing: ["Analyzing", "分析中"],
+  handed_off: ["Ops issue", "运维处理"],
+  needs_human: ["Needs a human", "需要人工"],
+  awaiting_review: ["Awaiting review", "待 review"],
+  observing: ["Observing", "观察中"],
+  resolved: ["Recovered", "已恢复"],
+  rejected: ["Rejected", "已驳回"],
+  superseded: ["Recovered on its own", "已自行恢复"],
+  failed: ["Failed", "失败"],
+  reverted: ["Reverted", "已撤销"],
 }
 
 // ops.repair appears with repair.py's first run; until then there is nothing to show.
@@ -526,20 +564,27 @@ export const failure = (e: unknown) => {
 
 export async function getProxyStats() {
   await requireUser()
+  const t = await getT()
   try {
     const res = await fetch(SUBPOOL_STATS, {
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
     })
-    if (!res.ok) return { error: `统计接口返回 HTTP ${res.status}` }
+    if (!res.ok)
+      return {
+        error: t(
+          `the stats endpoint returned HTTP ${res.status}`,
+          `统计接口返回 HTTP ${res.status}`
+        ),
+      }
     return { stats: JSON.parse(maskIp(await res.text())) as ProxyStats }
   } catch (e) {
     return { error: failure(e) }
   }
 }
 
-// subpool.conf (conflag KEY=VALUE lines) holds subscription tokens and the listener's password: only
-// the tuning keys leave the server as they are; listeners and subscriptions go out masked.
+// subpool.conf (conflag KEY=VALUE lines): the site shows the tuning keys and the subscriptions in full
+// (behind the login); the listener line, which holds the proxy's password, never leaves the server.
 export const SUBPOOL_CONF =
   process.env.SUBPOOL_CONF ?? "/srv/projects/subpool/subpool.conf"
 export const SUBPOOL_DEFAULTS = {
@@ -554,41 +599,66 @@ export const SUBPOOL_DEFAULTS = {
 }
 export type SubpoolKey = keyof typeof SUBPOOL_DEFAULTS
 // What the config page edits besides s (strategy) and c (check URL); range is what saving accepts.
+// Labels and hints are [English, 中文].
 export const SUBPOOL_FIELDS: {
   key: SubpoolKey
-  label: string
-  hint: string
+  label: [string, string]
+  hint: [string, string]
   range: [number, number]
 }[] = [
-  { key: "dr", label: "拨号失败换节点", hint: "次", range: [0, 10] },
+  {
+    key: "dr",
+    label: ["Dial failures before switching node", "拨号失败换节点"],
+    hint: ["times", "次"],
+    range: [0, 10],
+  },
   {
     key: "ri",
-    label: "订阅刷新间隔",
-    hint: "秒；填 0 不刷新",
+    label: ["Subscription refresh interval", "订阅刷新间隔"],
+    hint: ["seconds; 0 never refreshes", "秒；填 0 不刷新"],
     range: [0, 86400],
   },
-  { key: "ci", label: "节点检测间隔", hint: "秒", range: [30, 86400] },
-  { key: "ct", label: "节点检测超时", hint: "秒", range: [1, 60] },
+  {
+    key: "ci",
+    label: ["Node check interval", "节点检测间隔"],
+    hint: ["seconds", "秒"],
+    range: [30, 86400],
+  },
+  {
+    key: "ct",
+    label: ["Node check timeout", "节点检测超时"],
+    hint: ["seconds", "秒"],
+    range: [1, 60],
+  },
   {
     key: "wi",
-    label: "看门狗探测间隔",
-    hint: "秒；填 0 关闭",
+    label: ["Watchdog probe interval", "看门狗探测间隔"],
+    hint: ["seconds; 0 turns it off", "秒；填 0 关闭"],
     range: [0, 3600],
   },
   {
     key: "wf",
-    label: "看门狗连续失败",
-    hint: "次后退出，由 systemd 重启；填 0 不退出",
+    label: ["Watchdog failures in a row", "看门狗连续失败"],
+    hint: [
+      "then it exits and systemd restarts it; 0 never exits",
+      "次后退出，由 systemd 重启；填 0 不退出",
+    ],
     range: [0, 100],
   },
 ]
-export const SUBPOOL_STRATEGIES = {
-  rr: "rr 轮询",
-  random: "random 随机",
-  wrr: "wrr 加权轮询（延迟低的多用）",
-  ha: "ha 高可用（一直用第一个可用节点）",
-  lha: "lha 最低延迟",
-  dh: "dh 同一目标固定节点",
+export const SUBPOOL_STRATEGIES: Record<string, [string, string]> = {
+  rr: ["rr round robin", "rr 轮询"],
+  random: ["random", "random 随机"],
+  wrr: [
+    "wrr weighted round robin (low latency more often)",
+    "wrr 加权轮询（延迟低的多用）",
+  ],
+  ha: [
+    "ha high availability (first available node)",
+    "ha 高可用（一直用第一个可用节点）",
+  ],
+  lha: ["lha lowest latency", "lha 最低延迟"],
+  dh: ["dh same node per destination", "dh 同一目标固定节点"],
 }
 
 export async function getSubpoolConf() {
@@ -612,18 +682,11 @@ export async function getSubpoolConf() {
   const values = { ...SUBPOOL_DEFAULTS }
   for (const key of Object.keys(values) as SubpoolKey[])
     values[key] = all(key).at(-1) ?? values[key]
-  return {
-    values,
-    listens: all("l").map((v) => maskIp(v.replace(/\/\/[^/@\s]*@/, "//***@"))),
-    urls: all("u").map(maskSubscription), // edits name a URL by its position and this label
-    files: all("f"),
-    stats: all("stats").at(-1) ?? null,
-  }
+  return { values, urls: all("u"), files: all("f") }
 }
 
-/** A subscription URL as the site shows it: the origin only, the rest carries the access token. */
-export const maskSubscription = (url: string) =>
-  maskIp(URL.parse(url)?.origin ?? "?") + "/…"
+/** How subpool's /stats names a subscription URL: by its origin, masked like the rest of the stats. */
+export const statsName = (url: string) => maskIp(URL.parse(url)?.origin ?? "?")
 
 export async function getPgStatus() {
   try {
@@ -657,6 +720,7 @@ export async function getPgStatus() {
 // One INFO over a raw socket: the status page needs a single command, not a client library.
 export async function getRedisInfo() {
   await requireUser()
+  const t = await getT()
   const url = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379")
   const cmd = (...args: string[]) =>
     `*${args.length}\r\n` +
@@ -672,7 +736,9 @@ export async function getRedisInfo() {
             cmd("QUIT")
         )
       )
-      sock.setTimeout(3000, () => sock.destroy(new Error("3 秒没有响应")))
+      sock.setTimeout(3000, () =>
+        sock.destroy(new Error(t("no answer in 3 s", "3 秒没有响应")))
+      )
       sock.on("data", (c) => chunks.push(c))
       sock.on("error", reject)
       sock.on("close", () => resolve(Buffer.concat(chunks).toString()))
@@ -686,7 +752,8 @@ export async function getRedisInfo() {
       if (i > 0 && !line.startsWith("#"))
         info[line.slice(0, i)] = line.slice(i + 1)
     }
-    if (!info.redis_version) return { error: "INFO 没有返回内容" }
+    if (!info.redis_version)
+      return { error: t("INFO returned nothing", "INFO 没有返回内容") }
     return { info, ms }
   } catch (e) {
     return { error: failure(e) }

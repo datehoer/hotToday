@@ -1,10 +1,14 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { LoginForm } from "@/components/ops-client"
+import { LangSwitch, LoginForm } from "@/components/ops-client"
 import { getUser } from "@/lib/auth"
+import { getT } from "@/lib/ops"
 
-export const metadata: Metadata = { title: "登录" }
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return { title: t("Sign in", "登录") }
+}
 
 export default async function Login({
   searchParams,
@@ -14,8 +18,9 @@ export default async function Login({
   if (await getUser()) redirect("/")
   const { next = "/" } = await searchParams
   return (
-    <main className="flex min-h-svh items-center justify-center bg-sidebar p-4">
+    <main className="flex min-h-svh flex-col items-center justify-center gap-3 bg-sidebar p-4">
       <LoginForm next={next} />
+      <LangSwitch />
     </main>
   )
 }

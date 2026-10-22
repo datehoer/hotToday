@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { AutoRefresh, LoadMore } from "@/components/ops-client"
 import {
+  modelLine,
   PageHeader,
   PageTitle,
   PillNav,
@@ -15,19 +16,35 @@ import {
   getBoard,
   getRepairLog,
   getRunsAfter,
+  getT,
   type RepairState,
 } from "@/lib/ops"
-import { fmtNum, fmtTime, listSize } from "@/lib/utils"
+import { listSize } from "@/lib/utils"
 
-export const metadata: Metadata = { title: "AI 修复" }
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return { title: t("AI repair", "AI 修复") }
+}
 
 const STEP = 30
 const FILTERS = {
-  all: ["全部", null],
-  open: ["进行中", ["analyzing", "awaiting_review", "observing"]],
-  human: ["要人处理", ["needs_human", "handed_off", "failed"]],
-  done: ["已结束", ["resolved", "superseded", "rejected", "reverted"]],
-} as const satisfies Record<string, readonly [string, RepairState[] | null]>
+  all: [["All", "全部"], null],
+  open: [
+    ["In progress", "进行中"],
+    ["analyzing", "awaiting_review", "observing"],
+  ],
+  human: [
+    ["Needs a human", "要人处理"],
+    ["needs_human", "handed_off", "failed"],
+  ],
+  done: [
+    ["Closed", "已结束"],
+    ["resolved", "superseded", "rejected", "reverted"],
+  ],
+} as const satisfies Record<
+  string,
+  readonly [readonly [string, string], RepairState[] | null]
+>
 type Filter = keyof typeof FILTERS
 
 export default async function Repairs({
@@ -36,6 +53,7 @@ export default async function Repairs({
   searchParams: Promise<{ f?: string; n?: string }>
 }) {
   const query = await searchParams
+  const t = await getT()
   const filter: Filter =
     query.f && query.f in FILTERS ? (query.f as Filter) : "all"
   const n = listSize(query.n, STEP, 600)
@@ -60,20 +78,28 @@ export default async function Repairs({
 
   return (
     <>
-      <PageHeader crumbs={[["运维", "/"], ["AI 修复"]]} />
+      <PageHeader
+        crumbs={[[t("Ops", "运维"), "/"], [t("AI repair", "AI 修复")]]}
+      />
       {repairs.some((r) => r.state === "analyzing") && (
         <AutoRefresh seconds={10} />
       )}
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title="AI 修复">
-          每个修复任务的经过，最近有变化的在前：谁开的、诊断、批准后用新代码跑的那一次，和补丁上线后的两轮。
+        <PageTitle title={t("AI repair", "AI 修复")}>
+          {t(
+            "Every repair task, most recently changed first: who started it, the diagnosis, the run with the new code after approval, and the two rounds after the patch went live. ",
+            "每个修复任务的经过，最近有变化的在前：谁开的、诊断、批准后用新代码跑的那一次，和补丁上线后的两轮。"
+          )}
           {count(["awaiting_review"]) > 0 &&
-            `${count(["awaiting_review"])} 个待 review。`}
+            t(
+              `${count(["awaiting_review"])} awaiting review.`,
+              `${count(["awaiting_review"])} 个待 review。`
+            )}
         </PageTitle>
         <PillNav
           items={(Object.keys(FILTERS) as Filter[]).map((f) => ({
             href: href(f),
-            label: FILTERS[f][0],
+            label: t(...FILTERS[f][0]),
             count: count(FILTERS[f][1]),
             active: filter === f,
           }))}
@@ -93,17 +119,12 @@ export default async function Repairs({
                   {name(r.source)}
                 </Link>
                 <span className="text-xs text-muted-foreground">
-                  {[
-                    `#${r.id}`,
-                    r.reason,
-                    r.model &&
-                      `${r.model} · ${fmtNum(r.tokens)} tokens · 补丁 ${r.attempts} 次`,
-                  ]
+                  {[`#${r.id}`, r.reason, r.model && modelLine(t, r)]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
                 <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                  {fmtTime(r.updated_at)}
+                  {t.time(r.updated_at)}
                 </span>
               </div>
               {r.summary && r.summary !== r.log[0]?.note && (
@@ -114,12 +135,15 @@ export default async function Repairs({
           ))}
           {!repairs.length && (
             <p className="px-6 py-10 text-center text-sm text-muted-foreground">
-              没有符合条件的修复任务
+              {t("No repair task matches", "没有符合条件的修复任务")}
             </p>
           )}
           {page.length > n && (
             <LoadMore href={href(filter, n + STEP)}>
-              再看 {STEP} 个（已显示 {n} 个）
+              {t(
+                `${STEP} more (${n} shown)`,
+                `再看 ${STEP} 个（已显示 ${n} 个）`
+              )}
             </LoadMore>
           )}
         </Card>

@@ -8,7 +8,7 @@ import {
   Subscriptions,
   type SubscriptionRow,
 } from "@/components/ops-client"
-import { Facts, PageHeader, PageTitle, PillNav } from "@/components/ops"
+import { PageHeader, PageTitle, PillNav } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -30,18 +30,36 @@ import {
   getConfig,
   getProxyStats,
   getSubpoolConf,
+  getT,
+  statsName,
   SUBPOOL_CONF,
   SUBPOOL_FIELDS,
   SUBPOOL_STRATEGIES,
   type SourceConfig,
   type SpiderConfig,
 } from "@/lib/ops"
-import { fmtTime } from "@/lib/utils"
+import { count, type Translate } from "@/lib/i18n"
 
-export const metadata: Metadata = { title: "配置" }
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return { title: t("Config", "配置") }
+}
 
-const TABS = { sources: "源", repair: "AI 修复", subpool: "代理池" } as const
+const TABS = {
+  sources: ["Sources", "源"],
+  repair: ["AI repair", "AI 修复"],
+  subpool: ["Proxy pool", "代理池"],
+} as const
 type Tab = keyof typeof TABS
+
+// repair.py names its rules in Chinese; the English names go by reason code.
+const RULE_NAMES: Record<string, string> = {
+  proxy_error: "Proxy unreachable",
+  fetch_timeout: "Timed out",
+  http_5xx: "Server error (5xx)",
+  captcha: "Blocked or rate-limited",
+  fetch_error: "Can't connect",
+}
 
 // Broken source.yaml first, then enabled, then disabled.
 const rank = (s: SourceConfig) => (s.error ? 0 : s.enabled ? 1 : 2)
@@ -52,6 +70,7 @@ export default async function Config({
   searchParams: Promise<{ tab?: string }>
 }) {
   const asked = (await searchParams).tab ?? ""
+  const t = await getT()
   const tab: Tab = asked in TABS ? (asked as Tab) : "sources"
   let config: SpiderConfig | null = null
   let error = ""
@@ -66,74 +85,79 @@ export default async function Config({
 
   return (
     <>
-      <PageHeader crumbs={[["运维", "/"], ["配置"]]} />
+      <PageHeader crumbs={[[t("Ops", "运维"), "/"], [t("Config", "配置")]]} />
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title="配置">
-          源的设置在 hotToday 仓库的 sources/ 里，这里只读；AI 修复的设置存在
-          PostgreSQL，代理池的设置在 subpool.conf，都能在这里改。
+        <PageTitle title={t("Config", "配置")}>
+          {t(
+            "Source settings live in sources/ in the hotToday repo and are read-only here. AI repair settings are stored in PostgreSQL and the proxy pool's in subpool.conf; both can be changed here.",
+            "源的设置在 hotToday 仓库的 sources/ 里，这里只读；AI 修复的设置存在 PostgreSQL，代理池的设置在 subpool.conf，都能在这里改。"
+          )}
         </PageTitle>
         <PillNav
           items={(Object.keys(TABS) as Tab[]).map((key) => ({
             href: key === "sources" ? "/config" : `/config?tab=${key}`,
-            label: TABS[key],
+            label: t(...TABS[key]),
             count: key === "sources" ? config?.sources.length : undefined,
             active: tab === key,
           }))}
         />
         {tab === "subpool" ? (
-          <Subpool />
+          <Subpool t={t} />
         ) : !config ? (
           <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
             <RiErrorWarningLine />
-            <AlertTitle>读不到配置</AlertTitle>
+            <AlertTitle>{t("Can't read the config", "读不到配置")}</AlertTitle>
             <AlertDescription>
               <span className="font-mono break-all">{error}</span>
               <br />
-              配置是在 hottoday-spider 容器里跑 task.py --config
-              读出来的，容器没在运行时这里就是空的。
+              {t(
+                "It is read by running task.py --config in the hottoday-spider container, so it stays empty while the container isn't running.",
+                "配置是在 hottoday-spider 容器里跑 task.py --config 读出来的，容器没在运行时这里就是空的。"
+              )}
             </AlertDescription>
           </Alert>
         ) : tab === "sources" ? (
-          <Sources config={config} />
+          <Sources t={t} config={config} />
         ) : (
-          <Repair repair={config.repair} />
+          <Repair t={t} repair={config.repair} />
         )}
       </div>
     </>
   )
 }
 
-function Sources({ config }: { config: SpiderConfig }) {
+function Sources({ t, config }: { t: Translate; config: SpiderConfig }) {
   const { sources, proxies } = config
   const rows = sources.toSorted(
     (a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key)
   )
-  const count = (f: (s: SourceConfig) => boolean) => sources.filter(f).length
-  const types = Map.groupBy(
-    sources.filter((s) => s.type),
-    (s) => s.type!
-  )
+  const on = sources.filter((s) => s.enabled).length
+  const off = sources.filter((s) => s.enabled === false).length
+  const broken = sources.filter((s) => s.error).length
+  const types = [
+    ...Map.groupBy(
+      sources.filter((s) => s.type),
+      (s) => s.type!
+    ),
+  ]
 
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {sources.length} 个源：{count((s) => !!s.enabled)} 个启用，
-        {count((s) => s.enabled === false)} 个停用
-        {count((s) => !!s.error) > 0 &&
-          `，${count((s) => !!s.error)} 个 source.yaml 有错`}
-        。抓取方式{" "}
-        {[...types]
-          .map(([type, list]) => `${type} ${list.length} 个`)
-          .join("、")}
-        ；运行记录保留 {config.keep_days} 天。点源名看它的文件。
+        {t(
+          `${count(sources.length, "source")}: ${on} enabled, ${off} disabled${broken ? `, ${broken} with a broken source.yaml` : ""}. Fetched by ${types.map(([type, list]) => `${type} (${list.length})`).join(", ")}; run records are kept for ${count(config.keep_days, "day")}. Click a source to see its files.`,
+          `${sources.length} 个源：${on} 个启用，${off} 个停用${broken ? `，${broken} 个 source.yaml 有错` : ""}。抓取方式 ${types.map(([type, list]) => `${type} ${list.length} 个`).join("、")}；运行记录保留 ${config.keep_days} 天。点源名看它的文件。`
+        )}
       </p>
 
       <Card>
         <CardHeader>
-          <CardTitle>代理</CardTitle>
+          <CardTitle>{t("Proxies", "代理")}</CardTitle>
           <CardDescription>
-            hotToday config.py 里的 PROXIES，source.yaml 的 proxy
-            字段填这里的名字；账号密码已隐藏
+            {t(
+              "PROXIES in hotToday's config.py; the proxy field of a source.yaml takes one of these names. Credentials are hidden.",
+              "hotToday config.py 里的 PROXIES，source.yaml 的 proxy 字段填这里的名字；账号密码已隐藏"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
@@ -150,22 +174,25 @@ function Sources({ config }: { config: SpiderConfig }) {
                     href="/status"
                     className="ml-auto inline-flex items-center text-xs text-muted-foreground hover:text-foreground"
                   >
-                    实时状态
+                    {t("Live status", "实时状态")}
                     <RiArrowRightSLine className="size-4" />
                   </Link>
                 </div>
                 <span className="text-muted-foreground">
-                  {users.length} 个源用它：
+                  {t(
+                    `Used by ${count(users.length, "source")}: `,
+                    `${users.length} 个源用它：`
+                  )}
                   {users.map((s, i) => (
                     <span key={s.key}>
-                      {i > 0 && "、"}
+                      {i > 0 && t(", ", "、")}
                       <Link
                         href={`/sources/${s.key}`}
                         className="hover:underline"
                       >
                         {s.name}
                       </Link>
-                      {!s.enabled && "（停用）"}
+                      {!s.enabled && t(" (disabled)", "（停用）")}
                     </span>
                   ))}
                 </span>
@@ -173,7 +200,9 @@ function Sources({ config }: { config: SpiderConfig }) {
             )
           })}
           {!Object.keys(proxies).length && (
-            <span className="text-muted-foreground">没有配置代理</span>
+            <span className="text-muted-foreground">
+              {t("No proxies configured", "没有配置代理")}
+            </span>
           )}
         </CardContent>
       </Card>
@@ -182,13 +211,25 @@ function Sources({ config }: { config: SpiderConfig }) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="pl-4 sm:pl-6">源</TableHead>
-              <TableHead>方式</TableHead>
-              <TableHead className="hidden lg:table-cell">抓取</TableHead>
-              <TableHead className="hidden sm:table-cell">代理</TableHead>
-              <TableHead className="hidden md:table-cell">超时</TableHead>
-              <TableHead className="hidden md:table-cell">重试</TableHead>
-              <TableHead className="pr-4 sm:pr-6">状态</TableHead>
+              <TableHead className="pl-4 sm:pl-6">
+                {t("Source", "源")}
+              </TableHead>
+              <TableHead>{t("Type", "方式")}</TableHead>
+              <TableHead className="hidden lg:table-cell">
+                {t("Fetches", "抓取")}
+              </TableHead>
+              <TableHead className="hidden sm:table-cell">
+                {t("Proxy", "代理")}
+              </TableHead>
+              <TableHead className="hidden md:table-cell">
+                {t("Timeout", "超时")}
+              </TableHead>
+              <TableHead className="hidden md:table-cell">
+                {t("Retries", "重试")}
+              </TableHead>
+              <TableHead className="pr-4 sm:pr-6">
+                {t("Status", "状态")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -228,16 +269,20 @@ function Sources({ config }: { config: SpiderConfig }) {
                 <TableCell className="pr-4 sm:pr-6">
                   {s.error ? (
                     <span className="flex flex-col items-start gap-1">
-                      <Badge variant="destructive">source.yaml 有错</Badge>
+                      <Badge variant="destructive">
+                        {t("Broken source.yaml", "source.yaml 有错")}
+                      </Badge>
                       <span className="text-xs break-all text-destructive">
                         {s.error}
                       </span>
                     </span>
                   ) : s.enabled ? (
-                    <Badge variant="outline">每小时</Badge>
+                    <Badge variant="outline">{t("Hourly", "每小时")}</Badge>
                   ) : (
                     <span className="flex flex-col items-start gap-1">
-                      <Badge variant="secondary">已停用</Badge>
+                      <Badge variant="secondary">
+                        {t("Disabled", "已停用")}
+                      </Badge>
                       <span className="text-xs text-muted-foreground">
                         {s.disabled_reason}
                       </span>
@@ -253,15 +298,28 @@ function Sources({ config }: { config: SpiderConfig }) {
   )
 }
 
-function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
+function Repair({
+  t,
+  repair: r,
+}: {
+  t: Translate
+  repair: SpiderConfig["repair"]
+}) {
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>接口、模型、限额和提示词</CardTitle>
+          <CardTitle>
+            {t(
+              "Endpoint, model, limits and prompt",
+              "接口、模型、限额和提示词"
+            )}
+          </CardTitle>
           <CardDescription>
-            存在 PostgreSQL 的 ops.setting（密钥除外，它在
-            hotToday/.env），保存后下一轮和之后开的任务就按新设置。
+            {t(
+              "Stored in ops.setting in PostgreSQL, except the key, which is in hotToday/.env. After saving, the next round and every task opened after it use the new settings.",
+              "存在 PostgreSQL 的 ops.setting（密钥除外，它在 hotToday/.env），保存后下一轮和之后开的任务就按新设置。"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -271,17 +329,24 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
 
       <Card className="py-2">
         <CardHeader className="pt-4">
-          <CardTitle>分流规则</CardTitle>
+          <CardTitle>{t("Triage rules", "分流规则")}</CardTitle>
           <CardDescription>
-            按顺序匹配最近一次的错误，命中就归为运维处理，不调模型。用代理或浏览器的源交给人；其余（返回空、解析出错、条数偏低）交给模型。
+            {t(
+              "Matched in order against the latest error; a match makes it an ops issue and the model isn't called. Sources behind a proxy or a browser go to a human; the rest (empty responses, parse errors, low counts) go to the model.",
+              "按顺序匹配最近一次的错误，命中就归为运维处理，不调模型。用代理或浏览器的源交给人；其余（返回空、解析出错、条数偏低）交给模型。"
+            )}
           </CardDescription>
         </CardHeader>
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="pl-4 sm:pl-6">错误文本匹配</TableHead>
-              <TableHead>原因码</TableHead>
-              <TableHead className="pr-4 sm:pr-6">归类</TableHead>
+              <TableHead className="pl-4 sm:pl-6">
+                {t("Error text pattern", "错误文本匹配")}
+              </TableHead>
+              <TableHead>{t("Reason code", "原因码")}</TableHead>
+              <TableHead className="pr-4 sm:pr-6">
+                {t("Filed as", "归类")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -298,7 +363,9 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
                 <TableCell className="font-mono text-xs">
                   {rule.reason}
                 </TableCell>
-                <TableCell className="pr-4 sm:pr-6">{rule.label}</TableCell>
+                <TableCell className="pr-4 sm:pr-6">
+                  {t(RULE_NAMES[rule.reason] ?? rule.label, rule.label)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -307,16 +374,20 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>写在 repair.py 里的部分</CardTitle>
+          <CardTitle>
+            {t("Fixed in repair.py", "写在 repair.py 里的部分")}
+          </CardTitle>
           <CardDescription>
-            改这些要改代码。第一条用户消息由程序拼出：源的信息和最近 8
-            轮结果、源目录里的文件、最后一次成功存下的数据结构、用现在的代码在沙箱里试抓的结果
+            {t(
+              "Changing these means changing the code. The program builds the first user message: the source's details and last 8 rounds, the files in its folder, the data structure it last saved, and a sandbox fetch with the current code.",
+              "改这些要改代码。第一条用户消息由程序拼出：源的信息和最近 8 轮结果、源目录里的文件、最后一次成功存下的数据结构、用现在的代码在沙箱里试抓的结果"
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
           <details>
             <summary className="cursor-pointer font-medium">
-              提示词里 {"{doc}"} 的内容
+              {t("What {doc} in the prompt holds", "提示词里 {doc} 的内容")}
             </summary>
             <pre className="mt-2 max-h-[560px] overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
               {r.doc}
@@ -324,23 +395,30 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
           </details>
           <details>
             <summary className="cursor-pointer font-medium">
-              最后一个回合
+              {t("The last-turn message", "最后一个回合")}
             </summary>
             <pre className="mt-2 overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
               {r.final}
             </pre>
           </details>
           <div className="flex flex-col gap-1.5">
-            <span className="font-medium">工具</span>
-            {r.tools.map((t) => (
-              <div key={t.name} className="flex flex-wrap gap-x-2">
-                <span className="font-mono text-xs leading-5">{t.name}</span>
-                <span className="text-muted-foreground">{t.description}</span>
+            <span className="font-medium">{t("Tools", "工具")}</span>
+            {r.tools.map((tool) => (
+              <div key={tool.name} className="flex flex-wrap gap-x-2">
+                <span className="font-mono text-xs leading-5">{tool.name}</span>
+                <span className="text-muted-foreground">
+                  {tool.description}
+                </span>
               </div>
             ))}
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="font-medium">补丁里新加的 import 只能是这些</span>
+            <span className="font-medium">
+              {t(
+                "The only imports a patch may add",
+                "补丁里新加的 import 只能是这些"
+              )}
+            </span>
             <div className="flex flex-wrap gap-1.5">
               {r.safe_imports.map((m) => (
                 <Badge key={m} variant="secondary" className="font-mono">
@@ -355,13 +433,15 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
   )
 }
 
-async function Subpool() {
+async function Subpool({ t }: { t: Translate }) {
   const [conf, proxy] = await Promise.all([getSubpoolConf(), getProxyStats()])
   if ("error" in conf)
     return (
       <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
         <RiErrorWarningLine />
-        <AlertTitle>读不到 subpool.conf</AlertTitle>
+        <AlertTitle>
+          {t("Can't read subpool.conf", "读不到 subpool.conf")}
+        </AlertTitle>
         <AlertDescription>
           <span className="font-mono break-all">{conf.error}</span>
         </AlertDescription>
@@ -371,13 +451,12 @@ async function Subpool() {
   // subpool lists its subscriptions in the file's order; a line it hasn't loaded has no result.
   const loaded = p?.subscribe.sources ?? []
   const rows: SubscriptionRow[] = [
-    ...conf.urls.map((label) => ({ label, file: false })),
-    ...conf.files.map((label) => ({ label, file: true })),
+    ...conf.urls.map((url) => ({ url, file: false })),
+    ...conf.files.map((url) => ({ url, file: true })),
   ].map((r, i) => ({
     ...r,
     status:
-      loaded[i] &&
-      (r.file ? loaded[i].name === r.label : `${loaded[i].name}/…` === r.label)
+      loaded[i]?.name === (r.file ? r.url : statsName(r.url))
         ? loaded[i]
         : null,
   }))
@@ -385,9 +464,12 @@ async function Subpool() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>调度和检测</CardTitle>
+          <CardTitle>{t("Scheduling and checks", "调度和检测")}</CardTitle>
           <CardDescription>
-            保存时只改这几项，写回 {SUBPOOL_CONF}，再重启 subpool.service。
+            {t(
+              `Saving writes only these settings back to ${SUBPOOL_CONF}, then restarts subpool.service.`,
+              `保存时只改这几项，写回 ${SUBPOOL_CONF}，再重启 subpool.service。`
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -400,47 +482,20 @@ async function Subpool() {
       </Card>
       <Card className="py-2">
         <CardHeader className="pt-4">
-          <CardTitle>订阅</CardTitle>
+          <CardTitle>{t("Subscriptions", "订阅")}</CardTitle>
           <CardDescription>
             {p
-              ? `${fmtTime(Date.parse(p.subscribe.at) / 1000)} 拉取的结果，可用数是现在通过健康检测的节点。`
-              : `subpool 没在运行，看不到拉取结果：${"error" in proxy ? proxy.error : ""}。`}
-            链接里带着订阅密钥，网页上只显示域名；添加和替换要贴完整链接。
+              ? t(
+                  `As loaded at ${t.time(Date.parse(p.subscribe.at) / 1000)}; "available" counts the nodes passing the health check right now.`,
+                  `${t.time(Date.parse(p.subscribe.at) / 1000)} 拉取的结果，可用数是现在通过健康检测的节点。`
+                )
+              : t(
+                  `subpool isn't running, so there are no load results: ${"error" in proxy ? proxy.error : ""}.`,
+                  `subpool 没在运行，看不到拉取结果：${"error" in proxy ? proxy.error : ""}。`
+                )}
           </CardDescription>
         </CardHeader>
         <Subscriptions rows={rows} checking={!!p && p.pool.uptime_sec < 30} />
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>监听和统计</CardTitle>
-          <CardDescription>
-            只读：监听账号里有密码，要改就直接改 subpool.conf。
-            <Link
-              href="/status"
-              className="ml-1 underline-offset-4 hover:underline"
-            >
-              实时状态
-            </Link>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Facts
-            rows={[
-              [
-                "监听",
-                <span key="v" className="font-mono text-xs">
-                  {conf.listens.join("、") || "—"}
-                </span>,
-              ],
-              [
-                "统计接口",
-                <span key="v" className="font-mono text-xs">
-                  {conf.stats ?? "没开"}
-                </span>,
-              ],
-            ]}
-          />
-        </CardContent>
       </Card>
     </>
   )

@@ -12,10 +12,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { getBoard, getRounds } from "@/lib/ops"
-import { cn, fmtMs, fmtNum, fmtTime, listSize } from "@/lib/utils"
+import { count } from "@/lib/i18n"
+import { getBoard, getRounds, getT } from "@/lib/ops"
+import { cn, fmtNum, listSize } from "@/lib/utils"
 
-export const metadata: Metadata = { title: "运行" }
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getT()
+  return { title: t("Rounds", "运行") }
+}
 
 const STEP = 48 // two days; ops.round keeps 30 days
 
@@ -25,6 +29,7 @@ export default async function Runs({
   searchParams: Promise<{ n?: string }>
 }) {
   const n = listSize((await searchParams).n, STEP, 30 * 24)
+  const t = await getT()
   const [{ latest, running }, page] = await Promise.all([
     getBoard(),
     getRounds(n + 1),
@@ -38,30 +43,50 @@ export default async function Runs({
   return (
     <>
       <PageHeader
-        crumbs={[["运维", "/"], ["运行"]]}
+        crumbs={[[t("Ops", "运维"), "/"], [t("Rounds", "运行")]]}
         updated={latest?.finished_at}
       />
       {running && <AutoRefresh seconds={15} />}
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title="运行">
-          每小时整点一轮：抓取 → 清洗 → 向量化。
+        <PageTitle title={t("Rounds", "运行")}>
+          {t(
+            "One round on the hour: crawl → clean → embed. ",
+            "每小时整点一轮：抓取 → 清洗 → 向量化。"
+          )}
           {avg != null &&
-            `最近 ${took.length} 轮平均用时 ${fmtMs(avg * 1000)}。`}
+            t(
+              `The last ${count(took.length, "round")} took ${t.ms(avg * 1000)} on average.`,
+              `最近 ${took.length} 轮平均用时 ${t.ms(avg * 1000)}。`
+            )}
         </PageTitle>
         <Card className="py-2">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4 sm:pl-6">开始</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="hidden sm:table-cell">写入成功</TableHead>
-                <TableHead className="pr-4 sm:pr-3">没写入</TableHead>
-                <TableHead className="hidden lg:table-cell">抓取</TableHead>
-                <TableHead className="hidden lg:table-cell">清洗</TableHead>
-                <TableHead className="hidden lg:table-cell">向量化</TableHead>
-                <TableHead className="hidden md:table-cell">新增标题</TableHead>
+                <TableHead className="pl-4 sm:pl-6">
+                  {t("Started", "开始")}
+                </TableHead>
+                <TableHead>{t("Status", "状态")}</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  {t("Wrote data", "写入成功")}
+                </TableHead>
+                <TableHead className="pr-4 sm:pr-3">
+                  {t("Nothing", "没写入")}
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  {t("Crawl", "抓取")}
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  {t("Clean", "清洗")}
+                </TableHead>
+                <TableHead className="hidden lg:table-cell">
+                  {t("Embed", "向量化")}
+                </TableHead>
+                <TableHead className="hidden md:table-cell">
+                  {t("New titles", "新增标题")}
+                </TableHead>
                 <TableHead className="hidden pr-4 sm:table-cell sm:pr-6">
-                  用时
+                  {t("Took", "用时")}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -73,7 +98,7 @@ export default async function Runs({
                       href={`/runs/${r.started_at}`}
                       className="after:absolute after:inset-0"
                     >
-                      {fmtTime(r.started_at)}
+                      {t.time(r.started_at)}
                     </Link>
                   </TableCell>
                   <TableCell>
@@ -92,20 +117,20 @@ export default async function Runs({
                     {r.failed}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
-                    {fmtMs(r.crawl_ms)}
+                    {t.ms(r.crawl_ms)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
-                    {fmtMs(r.etl_ms)}
+                    {t.ms(r.etl_ms)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground tabular-nums lg:table-cell">
-                    {fmtMs(r.embed_ms)}
+                    {t.ms(r.embed_ms)}
                   </TableCell>
                   <TableCell className="hidden tabular-nums md:table-cell">
                     {fmtNum(r.new_titles)}
                   </TableCell>
                   <TableCell className="hidden pr-4 tabular-nums sm:table-cell sm:pr-6">
                     {r.finished_at != null
-                      ? fmtMs((r.finished_at - r.started_at) * 1000)
+                      ? t.ms((r.finished_at - r.started_at) * 1000)
                       : "—"}
                   </TableCell>
                 </TableRow>
@@ -116,7 +141,7 @@ export default async function Runs({
                     colSpan={9}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    还没有运行记录
+                    {t("No rounds recorded yet", "还没有运行记录")}
                   </TableCell>
                 </TableRow>
               )}
@@ -124,7 +149,10 @@ export default async function Runs({
           </Table>
           {page.length > n && (
             <LoadMore href={`/runs?n=${n + STEP}`}>
-              再看 {STEP} 轮（已显示 {n} 轮）
+              {t(
+                `${STEP} more rounds (${n} shown)`,
+                `再看 ${STEP} 轮（已显示 ${n} 轮）`
+              )}
             </LoadMore>
           )}
         </Card>

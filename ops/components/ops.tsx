@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Fragment } from "react"
 
-import { LinkPending } from "@/components/ops-client"
+import { LinkPending, LoadingBar } from "@/components/ops-client"
 import { Badge } from "@/components/ui/badge"
 import {
   Breadcrumb,
@@ -21,57 +21,66 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { count, type Translate } from "@/lib/i18n"
 import {
+  getT,
   phase,
+  PHASE,
   REPAIR_STATE,
   type Repair,
   type RepairState,
   type Round,
   type Run,
+  type Status,
 } from "@/lib/ops"
-import { cn, fmtMs, fmtNum, fmtTime } from "@/lib/utils"
+import { cn, fmtNum } from "@/lib/utils"
 
-export const STATUS = {
-  ok: "正常",
-  empty: "返回空数据",
-  error: "出错",
-  disabled: "已停用",
-} as const
+export const STATUS: Record<Status, [string, string]> = {
+  ok: ["OK", "正常"],
+  empty: ["Empty response", "返回空数据"],
+  error: ["Error", "出错"],
+  disabled: ["Disabled", "已停用"],
+}
 
-export function StatusBadge({
+export async function StatusBadge({
   run,
   low,
 }: {
   run: Pick<Run, "status">
   low?: boolean
 }) {
+  const t = await getT()
   if (low)
     return (
       <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400">
-        条数偏低
+        {t("Low count", "条数偏低")}
       </Badge>
     )
-  if (run.status === "ok") return <Badge variant="outline">正常</Badge>
+  if (run.status === "ok")
+    return <Badge variant="outline">{t(...STATUS.ok)}</Badge>
   if (run.status === "disabled")
-    return <Badge variant="secondary">已停用</Badge>
-  return <Badge variant="destructive">{STATUS[run.status]}</Badge>
+    return <Badge variant="secondary">{t(...STATUS.disabled)}</Badge>
+  return <Badge variant="destructive">{t(...STATUS[run.status])}</Badge>
 }
 
-export function PhaseBadge({ round }: { round: Round }) {
+export async function PhaseBadge({ round }: { round: Round }) {
+  const t = await getT()
   const p = phase(round)
-  if (p === "没跑完") return <Badge variant="destructive">没跑完</Badge>
-  if (p !== "已完成") return <Badge>{p}</Badge>
+  if (p === "unfinished")
+    return <Badge variant="destructive">{t(...PHASE[p])}</Badge>
+  if (p !== "done") return <Badge>{t(...PHASE[p])}</Badge>
   return round.error ? (
     <Badge variant="destructive" title={round.error}>
-      有错误
+      {t("Has errors", "有错误")}
     </Badge>
   ) : (
-    <Badge variant="outline">已完成</Badge>
+    <Badge variant="outline">{t(...PHASE.done)}</Badge>
   )
 }
 
 /** One bar per round, oldest first: blue wrote data, red wrote nothing, grey no record. */
-export function Spark({ history }: { history: (Run | null)[] }) {
+export async function Spark({ history }: { history: (Run | null)[] }) {
+  const t = await getT()
   return (
     <span className="inline-flex items-center gap-0.5" aria-hidden>
       {history.map((h, i) => (
@@ -79,8 +88,12 @@ export function Spark({ history }: { history: (Run | null)[] }) {
           key={i}
           title={
             h
-              ? `${fmtTime(h.round_at)} ${STATUS[h.status]}${h.items != null ? ` · ${h.items} 条` : ""}`
-              : "没有记录"
+              ? `${t.time(h.round_at)} ${t(...STATUS[h.status])}${
+                  h.items != null
+                    ? t(` · ${count(h.items, "item")}`, ` · ${h.items} 条`)
+                    : ""
+                }`
+              : t("no record", "没有记录")
           }
           className={cn(
             "h-[18px] w-1 rounded-[2px]",
@@ -187,13 +200,14 @@ export function Stat({
   )
 }
 
-export function PageHeader({
+export async function PageHeader({
   crumbs,
   updated,
 }: {
   crumbs: [string, string?][]
   updated?: number | null
 }) {
+  const t = await getT()
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
@@ -225,7 +239,7 @@ export function PageHeader({
       </Breadcrumb>
       {updated != null && (
         <span className="text-xs text-muted-foreground tabular-nums">
-          {fmtTime(updated)} 更新
+          {t(`Updated ${t.time(updated)}`, `${t.time(updated)} 更新`)}
         </span>
       )}
     </header>
@@ -245,13 +259,7 @@ export function PageSkeleton() {
         />
         <Skeleton className="h-4 w-28 rounded-full" />
       </header>
-      <div
-        role="progressbar"
-        aria-label="加载中"
-        className="relative -mt-px h-0.5 overflow-hidden"
-      >
-        <i className="absolute inset-y-0 w-1/3 animate-loading-bar rounded-full bg-primary motion-reduce:animate-none" />
-      </div>
+      <LoadingBar />
       <div className="flex flex-col gap-5 p-4 md:p-6">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-40" />
@@ -361,21 +369,21 @@ export function Segments({
 export const STAGES = [
   {
     key: "crawl_ms",
-    label: "抓取",
+    label: ["Crawl", "抓取"],
     light: "var(--chart-5)",
     dark: "var(--chart-1)",
     className: "bg-chart-5 dark:bg-chart-1",
   },
   {
     key: "etl_ms",
-    label: "清洗",
+    label: ["Clean", "清洗"],
     light: "var(--chart-4)",
     dark: "var(--chart-2)",
     className: "bg-chart-4 dark:bg-chart-2",
   },
   {
     key: "embed_ms",
-    label: "向量化",
+    label: ["Embed", "向量化"],
     light: "var(--chart-2)",
     dark: "var(--chart-4)",
     className: "bg-chart-2 dark:bg-chart-4",
@@ -428,9 +436,9 @@ const tally = (runs: Pick<Run, "status">[]) => ({
   disabled: runs.filter((r) => r.status === "disabled").length,
 })
 
-/** The four numbers of one round (概况 and 运行详情); linked on 概况, where they open the
- * matching source list or the round. */
-export function RoundStats({
+/** The four numbers of one round (overview and round detail); linked on the overview, where they
+ * open the matching source list or the round. */
+export async function RoundStats({
   round,
   runs,
   prevOk,
@@ -441,12 +449,14 @@ export function RoundStats({
   prevOk?: number | null
   linked?: boolean
 }) {
+  const t = await getT()
   const n = tally(runs)
   const at = linked ? `/runs/${round.started_at}` : undefined
+  const diff = prevOk == null ? 0 : Math.abs(n.ok - prevOk)
   return (
     <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
       <Stat
-        label="写入成功"
+        label={t("Wrote data", "写入成功")}
         value={n.ok}
         unit={`/ ${round.sources}`}
         href={linked ? "/sources?f=ok" : undefined}
@@ -454,38 +464,55 @@ export function RoundStats({
           prevOk == null
             ? undefined
             : n.ok === prevOk
-              ? "和上一轮持平"
-              : `比上一轮${n.ok > prevOk ? "多" : "少"} ${Math.abs(n.ok - prevOk)} 个`
+              ? t("same as the round before", "和上一轮持平")
+              : n.ok > prevOk
+                ? t(
+                    `${diff} more than the round before`,
+                    `比上一轮多 ${diff} 个`
+                  )
+                : t(
+                    `${diff} fewer than the round before`,
+                    `比上一轮少 ${diff} 个`
+                  )
         }
       />
       <Stat
-        label="没写入"
+        label={t("Wrote nothing", "没写入")}
         value={n.error + n.empty}
-        unit="个源"
+        unit={t(n.error + n.empty === 1 ? "source" : "sources", "个源")}
         href={linked ? "/sources?f=attention" : undefined}
-        note={`${n.error} 个出错 · ${n.empty} 个返回空数据`}
+        note={t(
+          `${count(n.error, "error")} · ${n.empty} empty`,
+          `${n.error} 个出错 · ${n.empty} 个返回空数据`
+        )}
       />
       <Stat
-        label="新增标题"
+        label={t("New titles", "新增标题")}
         value={fmtNum(round.new_titles)}
-        unit="条"
+        unit={t("", "条")}
         href={at}
-        note={`清洗用时 ${fmtMs(round.etl_ms)}`}
+        note={t(
+          `cleaning took ${t.ms(round.etl_ms)}`,
+          `清洗用时 ${t.ms(round.etl_ms)}`
+        )}
       />
       <Stat
-        label="向量化"
+        label={t("Embedded", "向量化")}
         value={fmtNum(round.embedded)}
-        unit="条"
+        unit={t("", "条")}
         href={at}
-        note={`失败 ${fmtNum(round.embed_failed)} · 用时 ${fmtMs(round.embed_ms)}`}
+        note={t(
+          `${fmtNum(round.embed_failed)} failed · took ${t.ms(round.embed_ms)}`,
+          `失败 ${fmtNum(round.embed_failed)} · 用时 ${t.ms(round.embed_ms)}`
+        )}
       />
     </div>
   )
 }
 
-/** Status split and step timings of one round; on 概况 (linked) the parts open the source list or
- * the round, and stack (one column) to sit beside another card. */
-export function RoundParts({
+/** Status split and step timings of one round; on the overview (linked) the parts open the source
+ * list or the round, and stack (one column) to sit beside another card. */
+export async function RoundParts({
   round,
   runs,
   linked,
@@ -496,38 +523,43 @@ export function RoundParts({
   linked?: boolean
   stack?: boolean
 }) {
+  const t = await getT()
   const n = tally(runs)
   const to = (href: string) => (linked ? href : undefined)
   return (
     <div className={cn("grid gap-4", !stack && "lg:grid-cols-2")}>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>{runs.length} 个源</CardTitle>
-          <CardDescription>这一轮的状态</CardDescription>
+          <CardTitle>
+            {t(count(runs.length, "source"), `${runs.length} 个源`)}
+          </CardTitle>
+          <CardDescription>
+            {t("Status in this round", "这一轮的状态")}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Segments
             parts={[
               {
-                label: "正常",
+                label: t(...STATUS.ok),
                 value: n.ok,
                 className: "bg-primary",
                 href: to("/sources?f=ok"),
               },
               {
-                label: "出错",
+                label: t(...STATUS.error),
                 value: n.error,
                 className: "bg-destructive",
                 href: to("/sources?f=attention"),
               },
               {
-                label: "返回空数据",
+                label: t(...STATUS.empty),
                 value: n.empty,
                 className: "bg-amber-600",
                 href: to("/sources?f=attention"),
               },
               {
-                label: "已停用",
+                label: t(...STATUS.disabled),
                 value: n.disabled,
                 className: "bg-muted-foreground/30",
                 href: to("/sources?f=disabled"),
@@ -538,22 +570,22 @@ export function RoundParts({
       </Card>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>这一轮各阶段</CardTitle>
+          <CardTitle>{t("Steps in this round", "这一轮各阶段")}</CardTitle>
           <CardDescription>
             {round.error ? (
               <span className="text-destructive">{round.error}</span>
             ) : (
-              "抓取 → 清洗 → 向量化"
+              t("Crawl → clean → embed", "抓取 → 清洗 → 向量化")
             )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Segments
             parts={STAGES.map((s) => ({
-              label: s.label,
+              label: t(...s.label),
               value: round[s.key] ?? 0,
               className: s.className,
-              text: `${s.label} ${fmtMs(round[s.key])}`,
+              text: `${t(...s.label)} ${t.ms(round[s.key])}`,
               href: to(`/runs/${round.started_at}`),
             }))}
           />
@@ -563,7 +595,8 @@ export function RoundParts({
   )
 }
 
-export function RepairBadge({ state }: { state: RepairState }) {
+export async function RepairBadge({ state }: { state: RepairState }) {
+  const t = await getT()
   const tone: Partial<Record<RepairState, string>> = {
     awaiting_review: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
     resolved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -578,51 +611,73 @@ export function RepairBadge({ state }: { state: RepairState }) {
           : "secondary"
   return (
     <Badge variant={variant} className={tone[state]}>
-      {REPAIR_STATE[state]}
+      {t(...REPAIR_STATE[state])}
     </Badge>
   )
 }
 
-const WHO: Record<string, string> = {
-  system: "系统",
-  agent: "AI",
-  test: "测试",
+/** "deepseek-v4-pro · 61,204 tokens · 2 patches" */
+export const modelLine = (
+  t: Translate,
+  r: Pick<Repair, "model" | "tokens" | "attempts">
+) =>
+  t(
+    `${r.model} · ${fmtNum(r.tokens)} tokens · ${count(r.attempts, "patch", "patches")}`,
+    `${r.model} · ${fmtNum(r.tokens)} tokens · 补丁 ${r.attempts} 次`
+  )
+
+const WHO: Record<string, [string, string]> = {
+  system: ["System", "系统"],
+  agent: ["AI", "AI"],
+  test: ["Test", "测试"],
 }
 
 /** What happened to a repair task, oldest first: its state changes (who and why), the run right after
- * approval and the first two rounds after the patch went live. */
-export function RepairTimeline({
+ * approval and the first two rounds after the patch went live. Notes are repair.py's, in Chinese. */
+export async function RepairTimeline({
   repair: r,
   after = [],
 }: {
   repair: Repair
   after?: Run[]
 }) {
+  const t = await getT()
   const v = r.verify
   const events = [
     ...r.log.map((l) => ({
       ts: l.ts,
-      who: WHO[l.by] ?? l.by,
-      text: REPAIR_STATE[l.to] + (l.note ? `：${l.note}` : ""),
+      who: WHO[l.by] ? t(...WHO[l.by]) : l.by,
+      text:
+        t(...REPAIR_STATE[l.to]) +
+        (l.note ? t(`: ${l.note}`, `：${l.note}`) : ""),
       bad: l.to === "failed" || l.to === "needs_human",
     })),
     ...(v
       ? [
           {
             ts: v.ts,
-            who: "运行",
+            who: t("Run", "运行"),
             text:
               v.status === "ok"
-                ? `批准后用新代码跑了一次：${v.items} 条，已写入${v.cleaned ? "并清洗" : `，清洗出错：${v.etl_error}`}`
-                : `批准后用新代码跑了一次：${v.status === "empty" ? "返回空数据" : `出错：${v.error}`}，没写入`,
+                ? t(
+                    `Ran once with the new code after approval: ${count(v.items ?? 0, "item")}, written${v.cleaned ? " and cleaned" : `; cleaning failed: ${v.etl_error}`}`,
+                    `批准后用新代码跑了一次：${v.items} 条，已写入${v.cleaned ? "并清洗" : `，清洗出错：${v.etl_error}`}`
+                  )
+                : t(
+                    `Ran once with the new code after approval: ${v.status === "empty" ? "empty response" : `error: ${v.error}`}; nothing written`,
+                    `批准后用新代码跑了一次：${v.status === "empty" ? "返回空数据" : `出错：${v.error}`}，没写入`
+                  ),
             bad: v.status !== "ok",
           },
         ]
       : []),
     ...after.map((u) => ({
       ts: u.finished_at,
-      who: "整点",
-      text: `${fmtTime(u.round_at)} 这一轮${STATUS[u.status]}${u.items != null ? `，${u.items} 条` : ""}${u.error ? `：${u.error}` : ""}`,
+      who: t("Round", "整点"),
+      text: t(
+        `${t.time(u.round_at)} round: ${STATUS[u.status][0].toLowerCase()}${u.items != null ? `, ${count(u.items, "item")}` : ""}${u.error ? `: ${u.error}` : ""}`,
+        `${t.time(u.round_at)} 这一轮${STATUS[u.status][1]}${u.items != null ? `，${u.items} 条` : ""}${u.error ? `：${u.error}` : ""}`
+      ),
       bad: u.status === "empty" || u.status === "error",
     })),
   ].sort((a, b) => a.ts - b.ts)
@@ -631,9 +686,13 @@ export function RepairTimeline({
       {events.map((e, i) => (
         <li key={i} className="flex gap-2">
           <span className="w-24 shrink-0 text-muted-foreground tabular-nums">
-            {fmtTime(e.ts)}
+            {t.time(e.ts)}
           </span>
-          <span className="w-8 shrink-0 text-muted-foreground">{e.who}</span>
+          <span
+            className={cn("shrink-0 text-muted-foreground", t("w-12", "w-8"))}
+          >
+            {e.who}
+          </span>
           <span
             className={cn(
               "min-w-0 [overflow-wrap:anywhere]",
