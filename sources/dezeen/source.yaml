@@ -7,8 +7,8 @@ retries: 0
 proxy: none
 
 fetch:
-  type: rss
-  url: https://www.dezeen.com/feed/
+  type: python
+  entry: spider:fetch
 
 extract:
   list: $
