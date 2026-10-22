@@ -2,6 +2,7 @@ import { RiArrowRightSLine, RiErrorWarningLine } from "@remixicon/react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
+import { RepairSettingsForm, SubpoolForm } from "@/components/ops-client"
 import { Facts, PageHeader, PageTitle, PillNav } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -20,12 +21,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { getConfig, type SourceConfig, type SpiderConfig } from "@/lib/ops"
-import { fmtNum } from "@/lib/utils"
+import {
+  getConfig,
+  getSubpoolConf,
+  SUBPOOL_CONF,
+  SUBPOOL_FIELDS,
+  SUBPOOL_STRATEGIES,
+  type SourceConfig,
+  type SpiderConfig,
+} from "@/lib/ops"
 
 export const metadata: Metadata = { title: "配置" }
 
-const TABS = { sources: "源", repair: "AI 修复" } as const
+const TABS = { sources: "源", repair: "AI 修复", subpool: "代理池" } as const
 type Tab = keyof typeof TABS
 
 // Broken source.yaml first, then enabled, then disabled.
@@ -36,23 +44,26 @@ export default async function Config({
 }: {
   searchParams: Promise<{ tab?: string }>
 }) {
-  const tab: Tab = (await searchParams).tab === "repair" ? "repair" : "sources"
+  const asked = (await searchParams).tab ?? ""
+  const tab: Tab = asked in TABS ? (asked as Tab) : "sources"
   let config: SpiderConfig | null = null
   let error = ""
-  try {
-    config = await getConfig()
-  } catch (e) {
-    const err = e as { stderr?: string; message?: string }
-    error = (err.stderr || err.message || "").trim().split("\n").at(-1) ?? ""
-  }
+  // The subpool tab reads its own file; the other two need the spider container.
+  if (tab !== "subpool")
+    try {
+      config = await getConfig()
+    } catch (e) {
+      const err = e as { stderr?: string; message?: string }
+      error = (err.stderr || err.message || "").trim().split("\n").at(-1) ?? ""
+    }
 
   return (
     <>
       <PageHeader crumbs={[["运维", "/"], ["配置"]]} />
       <div className="flex flex-col gap-5 p-4 md:p-6">
         <PageTitle title="配置">
-          爬虫容器里 task.py --config 读到的设置，只读。要改就改 hotToday
-          仓库里的文件，下一轮生效。
+          源的设置在 hotToday 仓库的 sources/ 里，这里只读；AI 修复的设置存在
+          PostgreSQL，代理池的设置在 subpool.conf，都能在这里改。
         </PageTitle>
         <PillNav
           items={(Object.keys(TABS) as Tab[]).map((key) => ({
@@ -62,7 +73,9 @@ export default async function Config({
             active: tab === key,
           }))}
         />
-        {!config ? (
+        {tab === "subpool" ? (
+          <Subpool />
+        ) : !config ? (
           <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
             <RiErrorWarningLine />
             <AlertTitle>读不到配置</AlertTitle>
@@ -240,68 +253,26 @@ function Sources({ config }: { config: SpiderConfig }) {
 function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
   return (
     <>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>模型</CardTitle>
-            <CardDescription>
-              在 hotToday/.env 里设
-              HOT_REPAIR_MODEL、HOT_REPAIR_KEY、HOT_REPAIR_DAILY，重建爬虫容器后生效
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Facts
-              rows={[
-                [
-                  "模型",
-                  <span key="v" className="font-mono">
-                    {r.model}
-                  </span>,
-                ],
-                [
-                  "接口",
-                  <span key="v" className="font-mono break-all">
-                    {r.api_url}
-                  </span>,
-                ],
-                [
-                  "密钥",
-                  r.key === "HOT_EMBED_KEY"
-                    ? "环境变量 HOT_EMBED_KEY，和向量化共用"
-                    : r.key
-                      ? `环境变量 ${r.key}`
-                      : "没设置，调不了模型",
-                ],
-              ]}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>限额</CardTitle>
-            <CardDescription>写在 repair.py 里</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Facts
-              rows={[
-                [
-                  "每天",
-                  `最多 ${r.daily} 个调模型的任务（24 小时内，手动的也算）`,
-                ],
-                [
-                  "每个任务",
-                  `最多 ${r.max_turns} 个回合、${fmtNum(r.max_tokens)} tokens、${r.task_seconds / 60} 分钟`,
-                ],
-                [
-                  "补丁",
-                  `最多提交 ${r.max_patches} 次，抓 ${r.max_fetches} 个网址`,
-                ],
-                ["沙箱试抓", `每次最多 ${r.dry_run_seconds} 秒`],
-              ]}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>模型、限额和提示词</CardTitle>
+          <CardDescription>
+            存在 PostgreSQL 的
+            ops.setting，保存后下一轮和之后开的任务就按新设置。接口{" "}
+            <span className="font-mono break-all">{r.api_url}</span>
+            ；密钥不进库，
+            {r.key === "HOT_EMBED_KEY"
+              ? "用环境变量 HOT_EMBED_KEY（和向量化共用）"
+              : r.key
+                ? `用环境变量 ${r.key}`
+                : "环境变量里没有，调不了模型"}
+            。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RepairSettingsForm settings={r} />
+        </CardContent>
+      </Card>
 
       <Card className="py-2">
         <CardHeader className="pt-4">
@@ -341,17 +312,19 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>提示词</CardTitle>
+          <CardTitle>写在 repair.py 里的部分</CardTitle>
           <CardDescription>
-            第一条用户消息由程序拼出：源的信息和最近 8
+            改这些要改代码。第一条用户消息由程序拼出：源的信息和最近 8
             轮结果、源目录里的文件、最后一次成功存下的数据结构、用现在的代码在沙箱里试抓的结果
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
-          <details open>
-            <summary className="cursor-pointer font-medium">系统提示词</summary>
+          <details>
+            <summary className="cursor-pointer font-medium">
+              提示词里 {"{doc}"} 的内容
+            </summary>
             <pre className="mt-2 max-h-[560px] overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
-              {r.system}
+              {r.doc}
             </pre>
           </details>
           <details>
@@ -381,6 +354,83 @@ function Repair({ repair: r }: { repair: SpiderConfig["repair"] }) {
               ))}
             </div>
           </div>
+        </CardContent>
+      </Card>
+    </>
+  )
+}
+
+async function Subpool() {
+  const conf = await getSubpoolConf()
+  if ("error" in conf)
+    return (
+      <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
+        <RiErrorWarningLine />
+        <AlertTitle>读不到 subpool.conf</AlertTitle>
+        <AlertDescription>
+          <span className="font-mono break-all">{conf.error}</span>
+        </AlertDescription>
+      </Alert>
+    )
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>调度和检测</CardTitle>
+          <CardDescription>
+            保存时只改这几项，写回 {SUBPOOL_CONF}，再重启 subpool.service。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SubpoolForm
+            values={conf.values}
+            fields={SUBPOOL_FIELDS}
+            strategies={SUBPOOL_STRATEGIES}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>订阅和监听</CardTitle>
+          <CardDescription>
+            只读：订阅链接和监听账号里有密钥，网页上不显示也不改，要改就直接改
+            subpool.conf。
+            <Link
+              href="/status"
+              className="ml-1 underline-offset-4 hover:underline"
+            >
+              实时状态
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Facts
+            rows={[
+              [
+                "订阅",
+                <span
+                  key="v"
+                  className="flex flex-col font-mono text-xs leading-5"
+                >
+                  {conf.subscriptions.map((u, i) => (
+                    <span key={i}>{u}</span>
+                  ))}
+                </span>,
+              ],
+              [
+                "监听",
+                <span key="v" className="font-mono text-xs">
+                  {conf.listens.join("、") || "—"}
+                </span>,
+              ],
+              [
+                "统计接口",
+                <span key="v" className="font-mono text-xs">
+                  {conf.stats ?? "没开"}
+                </span>,
+              ],
+            ]}
+          />
         </CardContent>
       </Card>
     </>

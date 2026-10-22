@@ -270,7 +270,7 @@ def print_config():
         "target": redact(spec["fetch"].get("url") or spec["fetch"].get("entry") or ""),
     } for spec in specs] + [{"key": key, "error": error} for key, error in bad.items()]
     print(json.dumps({"sources": sources, "proxies": {name: redact(url) for name, url in plugins.PROXIES.items()},
-                      "keep_days": OPS_KEEP_DAYS, "repair": repair.settings()}, ensure_ascii=False))
+                      "keep_days": OPS_KEEP_DAYS, "repair": repair.settings(repair.connect())}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

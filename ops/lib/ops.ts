@@ -249,6 +249,17 @@ export type Repair = {
     sample: [string, string | null, string | null][] | null
   } | null
   checks: Check[] | null
+  // The run right after approval, with the new code and the production write path
+  verify: {
+    ts: number
+    status: "ok" | "empty" | "error"
+    items: number | null
+    ms: number
+    error: string | null
+    limit: number // seconds it was allowed
+    cleaned?: boolean
+    etl_error?: string
+  } | null
   steps: { ts: number; tool: string; note: string }[]
   log: { ts: number; to: RepairState; by: string; note: string | null }[]
   created_at: number
@@ -274,7 +285,7 @@ async function queryRepairs(where: string, args: unknown[]) {
   try {
     const rows = await query<Repair>(
       `select id, source, state, category, reason, summary, evidence, model, tokens, attempts, diff,
-              dry_run, checks, steps, log, created_at, updated_at, applied_at
+              dry_run, checks, verify, steps, log, created_at, updated_at, applied_at
          from ops.repair where ${where} order by id desc limit 20`,
       args
     )
@@ -296,7 +307,8 @@ export const getOpenRepairs = () =>
   queryRepairs("state in ('analyzing', 'awaiting_review')", [])
 
 // The spider's configuration as it sees it: `task.py --config` inside the container validates every
-// source.yaml and reports the AI repair settings (no passwords or keys). Takes about a second.
+// source.yaml and reports the AI repair settings (ops.setting merged with repair.py's defaults; no
+// passwords or keys). Takes about a second.
 export type SourceConfig = {
   key: string
   name?: string
@@ -314,23 +326,36 @@ export type SpiderConfig = {
   sources: SourceConfig[]
   proxies: Record<string, string>
   keep_days: number
-  repair: {
-    model: string
+  repair: RepairSettings & {
     api_url: string
     key: string | null // which environment variable holds the key
-    daily: number
-    max_turns: number
-    max_patches: number
-    max_fetches: number
-    max_tokens: number
-    task_seconds: number
-    dry_run_seconds: number
-    system: string
+    custom_system: boolean // false: the prompt built into repair.py
+    defaults: RepairSettings
+    ranges: Record<RepairLimit, [number, number, string]> // min, max, name
+    updated_at: number | null
+    updated_by: string | null
+    doc: string // what {doc} in the prompt stands for
     final: string
     tools: { name: string; description: string }[]
     ops_rules: { pattern: string; reason: string; label: string }[]
     safe_imports: string[]
   }
+}
+
+// Saved in ops.setting by `repair.py settings`; system is the prompt template with its placeholders.
+export const REPAIR_LIMITS = [
+  "daily",
+  "max_turns",
+  "max_tokens",
+  "task_minutes",
+  "max_patches",
+  "max_fetches",
+  "dry_run_seconds",
+] as const
+export type RepairLimit = (typeof REPAIR_LIMITS)[number]
+export type RepairSettings = Record<RepairLimit, number> & {
+  model: string
+  system: string
 }
 
 const run = promisify(execFile)
@@ -438,6 +463,91 @@ export async function getProxyStats() {
     return { stats: JSON.parse(maskIp(await res.text())) as ProxyStats }
   } catch (e) {
     return { error: failure(e) }
+  }
+}
+
+// subpool.conf (conflag KEY=VALUE lines) holds subscription tokens and the listener's password: only
+// the tuning keys leave the server as they are; listeners and subscriptions go out masked.
+export const SUBPOOL_CONF =
+  process.env.SUBPOOL_CONF ?? "/srv/projects/subpool/subpool.conf"
+export const SUBPOOL_DEFAULTS = {
+  s: "rr",
+  dr: "3",
+  ri: "3600",
+  c: "http://www.msftconnecttest.com/connecttest.txt#expect=200",
+  ci: "600",
+  ct: "10",
+  wi: "60",
+  wf: "0",
+}
+export type SubpoolKey = keyof typeof SUBPOOL_DEFAULTS
+// What the config page edits besides s (strategy) and c (check URL); range is what saving accepts.
+export const SUBPOOL_FIELDS: {
+  key: SubpoolKey
+  label: string
+  hint: string
+  range: [number, number]
+}[] = [
+  { key: "dr", label: "拨号失败换节点", hint: "次", range: [0, 10] },
+  {
+    key: "ri",
+    label: "订阅刷新间隔",
+    hint: "秒；填 0 不刷新",
+    range: [0, 86400],
+  },
+  { key: "ci", label: "节点检测间隔", hint: "秒", range: [30, 86400] },
+  { key: "ct", label: "节点检测超时", hint: "秒", range: [1, 60] },
+  {
+    key: "wi",
+    label: "看门狗探测间隔",
+    hint: "秒；填 0 关闭",
+    range: [0, 3600],
+  },
+  {
+    key: "wf",
+    label: "看门狗连续失败",
+    hint: "次后退出，由 systemd 重启；填 0 不退出",
+    range: [0, 100],
+  },
+]
+export const SUBPOOL_STRATEGIES = {
+  rr: "rr 轮询",
+  random: "random 随机",
+  wrr: "wrr 加权轮询（延迟低的多用）",
+  ha: "ha 高可用（一直用第一个可用节点）",
+  lha: "lha 最低延迟",
+  dh: "dh 同一目标固定节点",
+}
+
+export async function getSubpoolConf() {
+  await requireUser()
+  let text: string
+  try {
+    text = await readFile(/*turbopackIgnore: true*/ SUBPOOL_CONF, "utf8")
+  } catch (e) {
+    return { error: failure(e) }
+  }
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#") && l.includes("="))
+    .map((l) => [
+      l.slice(0, l.indexOf("=")).trim(),
+      l.slice(l.indexOf("=") + 1).trim(),
+    ])
+  const all = (key: string) =>
+    lines.filter(([k]) => k === key).map(([, v]) => v)
+  const values = { ...SUBPOOL_DEFAULTS }
+  for (const key of Object.keys(values) as SubpoolKey[])
+    values[key] = all(key).at(-1) ?? values[key]
+  return {
+    values,
+    listens: all("l").map((v) => maskIp(v.replace(/\/\/[^/@\s]*@/, "//***@"))),
+    subscriptions: [
+      ...all("u").map((v) => maskIp(URL.parse(v)?.origin ?? "?") + "/…"),
+      ...all("f").map((v) => `文件 ${v}`),
+    ],
+    stats: all("stats").at(-1) ?? null,
   }
 }
 

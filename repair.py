@@ -5,18 +5,20 @@
   1. 进行中的任务: 应用后连续 2 轮正常 → 已恢复; 没等到修复源自己好了 → 自行恢复
   2. 最近两轮都失败 (或条数都偏低) 的源开任务, 一段连续失败只开一个。按错误文本分流:
      代理、超时、连不上、5xx、403/429 是运维问题, 不调模型; 浏览器类和用代理的源交给人;
-     其余 (返回空、解析出错、条数偏低) 交给模型, 每天最多 HOT_REPAIR_DAILY 个
+     其余 (返回空、解析出错、条数偏低) 交给模型, 24 小时内最多 daily 个
   3. 模型只有五个工具: 读本源目录的文件、看试抓时的 HTTP 响应、抓一个公网 https 地址、提交补丁 (平台在沙箱里试抓并检查, 最多 3 次)、
-     结束并给出诊断。检查全部通过才进「待 review」, 人在运维页批准后写入 sources/<key>/
+     结束并给出诊断。检查全部通过才进「待 review」, 人在运维页批准后写入 sources/<key>/, 并立即用新代码跑一次
+模型、限额和系统提示词存在 ops.setting (name = 'repair'), 运维页「配置 → AI 修复」可改, 每轮和每个命令开始时读一次。
 沙箱: 试抓跑的是模型写的代码, 所以用 nobody 用户、干净的环境变量、只放了本源目录和 plugins.py 的临时目录,
 读不到 config.py、仓库和容器的环境变量。批准前人要看 diff: 检查只能拦住明显的越界, 拦不住所有恶意代码。
 
 在容器里跑:
   python repair.py run <key>              手动让 AI 分析一个源 (要 root: 沙箱要切到 nobody)
-  python repair.py approve <id> --by 名字  应用补丁 (用 -u 1000:1000 跑, 文件归属不变)
+  python repair.py approve <id> --by 名字  应用补丁并立即跑一次 (用 -u 1000:1000 跑, 文件归属不变)
   python repair.py reject <id> --by 名字
   python repair.py revert <id> --by 名字   改回应用之前的文件
   python repair.py list
+  python repair.py settings '<json>' --by 名字  改设置 (运维页保存时调), 不给 JSON 就打印当前设置
 """
 import argparse
 import ast
@@ -45,13 +47,20 @@ from psycopg2.extras import Json
 import plugins
 from plugins import redact
 
-# api.hotday.uk 这个分组里的 claude 渠道处理不了工具结果 (2026-10-21 实测), deepseek-v4-pro 可以
-MODEL = os.getenv("HOT_REPAIR_MODEL", "deepseek-v4-pro")
 API_URL = "https://api.hotday.uk/v1/chat/completions"
-API_KEY = os.getenv("HOT_REPAIR_KEY") or os.getenv("HOT_EMBED_KEY", "")  # 默认和向量化共用一个密钥
-DAILY = int(os.getenv("HOT_REPAIR_DAILY", "4"))  # 24 小时内最多几个调模型的任务 (手动的也算), 满了就不再自动开
-MAX_TURNS, MAX_PATCHES, MAX_FETCHES, MAX_TOKENS = 30, 3, 6, 600_000  # 每个任务
-TASK_SECONDS, DRY_RUN_SECONDS = 15 * 60, 120
+API_KEY = os.getenv("HOT_REPAIR_KEY") or os.getenv("HOT_EMBED_KEY", "")  # 密钥不进库; 默认和向量化共用一个
+# 运维页能改的设置 (ops.setting 里 name = 'repair' 那行), 没改过的用这里的默认值; system 为 None 时用下面的 SYSTEM。
+# api.hotday.uk 这个分组里的 claude 渠道处理不了工具结果 (2026-10-21 实测), deepseek-v4-pro 可以
+DEFAULTS = {"model": "deepseek-v4-pro", "daily": 4, "max_turns": 30, "max_patches": 3, "max_fetches": 6,
+            "max_tokens": 600_000, "task_minutes": 15, "dry_run_seconds": 120, "system": None}
+# 能填的范围和名字 (运维页的表单也用这些名字)。daily: 24 小时内最多几个调模型的任务 (手动的也算), 满了就不再自动开,
+# 0 就是不自动分析; 其余是每个任务的上限
+RANGES = {"daily": (0, 48, "每天最多几个任务"), "max_turns": (4, 60, "每个任务最多回合"),
+          "max_tokens": (50_000, 2_000_000, "每个任务最多 tokens"), "task_minutes": (3, 40, "每个任务最多分钟"),
+          "max_patches": (1, 5, "每个任务最多提交补丁"), "max_fetches": (0, 20, "每个任务最多抓网址"),
+          "dry_run_seconds": (30, 300, "沙箱试抓最多秒数")}
+S = dict(DEFAULTS)  # 当前生效的设置, load_settings() 更新
+VERIFY_SECONDS = 40  # 批准后立即跑一次的上限: 运维页的请求 60 秒就断
 ACTIVE = ["analyzing", "awaiting_review", "observing"]
 NOBODY = 65534
 # 补丁新加的 import 只能是这些 (含子模块); 别的一律交给人
@@ -87,6 +96,7 @@ CREATE TABLE IF NOT EXISTS ops.repair (
     diff       text,
     dry_run    jsonb,
     checks     jsonb,
+    verify     jsonb,                         -- 批准后立即用新代码跑的那一次
     steps      jsonb NOT NULL DEFAULT '[]',   -- agent 每一步做了什么
     log        jsonb NOT NULL DEFAULT '[]',   -- 状态变化
     created_at bigint NOT NULL,
@@ -96,6 +106,12 @@ CREATE TABLE IF NOT EXISTS ops.repair (
 CREATE INDEX IF NOT EXISTS repair_source_idx ON ops.repair (source, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS repair_one_active ON ops.repair (source)
     WHERE state IN ('analyzing', 'awaiting_review', 'observing');
+CREATE TABLE IF NOT EXISTS ops.setting (
+    name       text PRIMARY KEY,               -- repair
+    value      jsonb NOT NULL,
+    updated_at bigint NOT NULL,
+    updated_by text
+);
 """
 
 SYSTEM = """你是 hotToday 爬虫的修复 agent。一个源连续出错, 你要查清原因, 能改就改好。
@@ -114,6 +130,13 @@ SYSTEM = """你是 hotToday 爬虫的修复 agent。一个源连续出错, 你�
 
 source.yaml 的写法 (plugins.py 的说明):
 {doc}"""
+
+
+def system_prompt(key):
+    """系统提示词 (运维页改过就用改过的): {key} {patches} {fetches} {doc} 换成实际值, 别的花括号原样保留"""
+    values = {"key": key, "patches": S["max_patches"], "fetches": S["max_fetches"], "doc": plugins.__doc__.strip()}
+    return re.sub(r"\{(key|patches|fetches|doc)\}", lambda m: str(values[m[1]]), S["system"] or SYSTEM)
+
 
 REASONS = ("path_miss / field_missing / count_low / parse_error / empty_list / fetch_timeout / proxy_error / http_5xx / "
            "auth_expired / captcha / sign_rejected / unknown")
@@ -246,7 +269,37 @@ def connect():
     conn.autocommit = True
     cur = conn.cursor()
     cur.execute(SCHEMA)
+    load_settings(cur)
     return cur
+
+
+def load_settings(cur):
+    cur.execute("SELECT value FROM ops.setting WHERE name = 'repair'")
+    row = cur.fetchone()
+    S.clear()
+    S.update(DEFAULTS, **{k: v for k, v in (row[0] if row else {}).items() if k in DEFAULTS})
+
+
+def save_settings(cur, new, by):
+    """运维页保存的设置: 校验后整行写进 ops.setting, 返回出错说明; 和默认值一样的项不存"""
+    value = {}
+    for key, (low, high, name) in RANGES.items():
+        if type(new.get(key)) is not int or not low <= new[key] <= high:
+            return f"{name}要填 {low} 到 {high} 的整数"
+        value[key] = new[key]
+    if not re.fullmatch(r"[\w.:/-]{1,80}", str(new.get("model") or "")):
+        return "模型名只能有字母、数字和 . _ : / -"
+    value["model"] = str(new["model"])
+    system = str(new.get("system") or "").replace("\r\n", "\n").strip()
+    if len(system) > 20000:
+        return "系统提示词太长 (最多 2 万字)"
+    value["system"] = system if system and system != SYSTEM.strip() else None
+    value = {k: v for k, v in value.items() if v != DEFAULTS[k]}
+    cur.execute("INSERT INTO ops.setting (name, value, updated_at, updated_by) VALUES ('repair', %s, %s, %s) "
+                "ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at, "
+                "updated_by = EXCLUDED.updated_by", (Json(value), int(time.time()), by))
+    load_settings(cur)
+    return None
 
 
 def _jsonable(fields):
@@ -316,10 +369,11 @@ def last_success(cur, key):
 def after_round(cur, round_at):
     """task.py 每轮结束调用。出错只记日志; 新任务只在本轮开始后 35 分钟内开, 不耽误下一轮"""
     cur.execute(SCHEMA)
+    load_settings(cur)
     settle(cur)
     cur.execute("SELECT count(*) FROM ops.repair WHERE model IS NOT NULL AND created_at > %s",
                 (int(time.time()) - 86400,))
-    budget = DAILY - cur.fetchone()[0]
+    budget = S["daily"] - cur.fetchone()[0]
     specs = {s["key"]: s for s in plugins.load_sources(import_entries=False)[0]}
     for key, spec in specs.items():
         if not spec["enabled"] or time.time() > round_at + 35 * 60:
@@ -338,7 +392,7 @@ def after_round(cur, round_at):
             if budget <= 0:
                 continue
             budget -= 1
-        start(cur, spec, route, "system", until=min(time.time() + TASK_SECONDS, round_at + 50 * 60))
+        start(cur, spec, route, "system", until=min(time.time() + S["task_minutes"] * 60, round_at + 50 * 60))
 
 
 def settle(cur):
@@ -394,7 +448,7 @@ def start(cur, spec, route, by, until):
     if category != "structural":
         state = "handed_off" if category == "ops" else "needs_human"
         return create(cur, spec["key"], state, by, note, category=category, reason=reason, summary=note)
-    task_id = create(cur, spec["key"], "analyzing", by, note, category=category, reason=reason, model=MODEL)
+    task_id = create(cur, spec["key"], "analyzing", by, note, category=category, reason=reason, model=S["model"])
     if task_id:
         try:
             Agent(cur, task_id, spec, until).run()
@@ -436,11 +490,12 @@ def dry_run(key, files):
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, user=NOBODY, group=NOBODY,
                                 extra_groups=[], preexec_fn=_limits, start_new_session=True)
         try:
-            out, err = proc.communicate(timeout=DRY_RUN_SECONDS)
+            out, err = proc.communicate(timeout=S["dry_run_seconds"])
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
             proc.communicate()
-            return {"status": "error", "error": f"试抓超过 {DRY_RUN_SECONDS} 秒", "captures": [], "ms": DRY_RUN_SECONDS * 1000}
+            return {"status": "error", "error": f"试抓超过 {S['dry_run_seconds']} 秒", "captures": [],
+                    "ms": S["dry_run_seconds"] * 1000}
         text = out.decode("utf-8", "replace")
         mark = text.rfind("\n@@RESULT@@")
         if mark < 0:
@@ -561,12 +616,13 @@ class Agent:
         first = dry_run(self.key, self.old)
         self.captures = list(first.get("captures", []))  # 试抓和 fetch_url 记下的响应, 编号一直有效
         self.step("dry_run", f"现在的代码试抓一次: {first['status']}" + (f", {first.get('items')} 条" if "items" in first else ""))
-        messages = [{"role": "system", "content": SYSTEM.format(key=self.key, patches=MAX_PATCHES, fetches=MAX_FETCHES, doc=plugins.__doc__)},
+        messages = [{"role": "system", "content": system_prompt(self.key)},
                     {"role": "user", "content": self.package(runs, first)}]
-        for turn in range(MAX_TURNS):
+        turns = S["max_turns"]
+        for turn in range(turns):
             # 最后一个回合 (或快到时间、token 上限) 直接要诊断, 查不出来也要留下给人看
-            final = turn == MAX_TURNS - 1 or time.time() > self.until - 90 or self.tokens > MAX_TOKENS
-            if turn == MAX_TURNS - 4:
+            final = turn == turns - 1 or time.time() > self.until - 90 or self.tokens > S["max_tokens"]
+            if turn == turns - 4:
                 messages.append({"role": "user", "content": "还剩 3 个回合。找到数据就用 propose_patch 提交; 找不到就调用 "
                                  "finish (category=human), 在 summary 里写清楚查到了什么、数据现在在哪。"})
             if final:
@@ -653,8 +709,8 @@ class Agent:
         if name == "fetch_url":
             return self.fetch_url(str(args.get("url", "")))
         if name == "propose_patch":
-            if self.patches >= MAX_PATCHES:
-                return f"已经提交过 {MAX_PATCHES} 次, 不能再提交了, 请调用 finish"
+            if self.patches >= S["max_patches"]:
+                return f"已经提交过 {S['max_patches']} 次, 不能再提交了, 请调用 finish"
             self.patches += 1
             result = self.try_patch(args.get("files") or {}, str(args.get("note") or ""))
             return result
@@ -666,8 +722,8 @@ class Agent:
 
     def fetch_url(self, url):
         """替模型抓一个公网 https 地址; 不跟随跳转 (跳转目标可能是内网), 要跳就告诉它地址"""
-        if self.fetches >= MAX_FETCHES:
-            return f"fetch_url 已经用了 {MAX_FETCHES} 次"
+        if self.fetches >= S["max_fetches"]:
+            return f"fetch_url 已经用了 {S['max_fetches']} 次"
         host = urlsplit(url).hostname
         if not url.startswith("https://") or not host:
             return "只能抓 https 地址"
@@ -783,14 +839,17 @@ class Agent:
         logger.info(f"[{self.key}] repair {self.id}: {to} ({self.tokens} tokens, {self.patches} 次补丁)")
 
 
-def settings():
-    """当前生效的模型、限额、提示词、工具和分流规则, 给运维页的配置页看 (task.py --config); 不含密钥"""
-    return {
-        "model": MODEL, "api_url": API_URL,
+def settings(cur):
+    """当前生效的设置、提示词、工具和分流规则, 给运维页的配置页看 (task.py --config); 不含密钥。
+    system 是没替换占位符的模板, 运维页编辑的就是它"""
+    cur.execute("SELECT updated_at, updated_by FROM ops.setting WHERE name = 'repair'")
+    updated = cur.fetchone() or (None, None)
+    return S | {
+        "system": S["system"] or SYSTEM.strip(), "custom_system": S["system"] is not None,
+        "defaults": DEFAULTS | {"system": SYSTEM.strip()}, "ranges": RANGES,
+        "updated_at": updated[0], "updated_by": updated[1], "api_url": API_URL,
         "key": "HOT_REPAIR_KEY" if os.getenv("HOT_REPAIR_KEY") else "HOT_EMBED_KEY" if API_KEY else None,
-        "daily": DAILY, "max_turns": MAX_TURNS, "max_patches": MAX_PATCHES, "max_fetches": MAX_FETCHES,
-        "max_tokens": MAX_TOKENS, "task_seconds": TASK_SECONDS, "dry_run_seconds": DRY_RUN_SECONDS,
-        "system": SYSTEM.format(key="<key>", patches=MAX_PATCHES, fetches=MAX_FETCHES, doc=plugins.__doc__.strip()),
+        "doc": plugins.__doc__.strip(),
         "final": FINAL,
         "tools": [{"name": t["function"]["name"], "description": t["function"]["description"]} for t in TOOLS],
         "ops_rules": [{"pattern": pattern, "reason": reason, "label": label} for pattern, reason, label in OPS_RULES],
@@ -799,7 +858,7 @@ def settings():
 
 
 def chat(messages, tools=True):
-    body = {"model": MODEL, "messages": messages, "max_tokens": 8000} | ({"tools": TOOLS} if tools else {})
+    body = {"model": S["model"], "messages": messages, "max_tokens": 8000} | ({"tools": TOOLS} if tools else {})
     error = None
     for attempt in range(3):
         try:
@@ -861,7 +920,40 @@ def approve(cur, task_id, by):
     if not move(cur, task_id, "awaiting_review", "observing", by, "批准并应用", applied_at=int(time.time())):
         apply(task, "old")
         return "状态已经变了, 已改回"
-    return f"已应用到 sources/{task['source']}/, 下一轮开始观察"
+    return f"已应用到 sources/{task['source']}/。" + verify(cur, task_id, task["source"])
+
+
+def verify(cur, task_id, key):
+    """批准后用生产代码立即跑一次这个源: 和整点那轮一样写进源表, 再清洗这张表, 结果记在任务的 verify 里。
+    只试一次, 最多 VERIFY_SECONDS 秒; 是否恢复仍看之后的两轮"""
+    import contextlib
+    import io
+
+    import task as runner
+    from etl.incremental import run_incremental
+
+    started = time.monotonic()
+    try:
+        spec = plugins._load(plugins.SOURCES_DIR / key, True)
+        limit = min(spec["timeout_s"], VERIFY_SECONDS)
+        status, items, error = runner.crawl(cur, dict(spec, retries=0, timeout_s=limit))
+    except Exception as err:
+        status, items, error, limit = "error", None, redact(f"{type(err).__name__}: {err}"), VERIFY_SECONDS
+    result = {"ts": int(time.time()), "status": status, "items": items, "error": error,
+              "ms": int((time.monotonic() - started) * 1000), "limit": limit}
+    if status == "ok":
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):  # 它按表打印进度; 运维页把最后一行输出当结果
+                run_incremental(only=key)
+            result["cleaned"] = True
+        except Exception as err:
+            result["etl_error"] = redact(err, 200)
+    cur.execute("UPDATE ops.repair SET verify = %s WHERE id = %s", (Json(result), task_id))
+    if status == "ok":
+        return f"用新代码跑了一次: {items} 条, 已写入" + ("并清洗" if result.get("cleaned") else ", 清洗出错")
+    if status == "empty":
+        return "用新代码跑了一次: 返回空数据, 没写入"
+    return f"用新代码跑了一次: 出错, 没写入 ({error})"
 
 
 def revert(cur, task_id, by):
@@ -879,13 +971,24 @@ def revert(cur, task_id, by):
 
 def main():
     parser = argparse.ArgumentParser(description="AI 修复")
-    parser.add_argument("command", choices=["run", "approve", "reject", "revert", "list"])
-    parser.add_argument("target", nargs="?", help="run 给源的 key, 其他给任务 id")
+    parser.add_argument("command", choices=["run", "approve", "reject", "revert", "list", "settings"])
+    parser.add_argument("target", nargs="?", help="run 给源的 key, settings 给 JSON, 其他给任务 id")
     parser.add_argument("--by", default="cli")
     args = parser.parse_args()
     if not re.fullmatch(r"[\w.-]{1,40}", args.by):
         sys.exit("--by 只能是字母数字")
     cur = connect()
+    if args.command == "settings":
+        if args.target:
+            try:
+                new = json.loads(args.target)
+            except ValueError:
+                sys.exit("设置要是 JSON")
+            error = save_settings(cur, new if isinstance(new, dict) else {}, args.by)
+            print(f"没保存: {error}" if error else "已保存, 下一轮和之后的任务按新设置")
+        else:
+            print(json.dumps(settings(cur), ensure_ascii=False, indent=2))
+        return
     if args.command == "list":
         cur.execute("SELECT id, source, state, reason, tokens, to_timestamp(created_at) FROM ops.repair "
                     "ORDER BY id DESC LIMIT 30")
@@ -908,7 +1011,7 @@ def main():
             route = triage(spec, latest, usual(runs))
             if route[0] == "ops" or not is_bad(latest, usual(runs)):  # 人点了「让 AI 分析」: 运维类也让模型看一眼
                 route = ("structural", route[1] if route[0] == "ops" else "unknown", "手动让 AI 分析")
-        task_id = start(cur, spec, route, args.by, until=time.time() + TASK_SECONDS)
+        task_id = start(cur, spec, route, args.by, until=time.time() + S["task_minutes"] * 60)
         task = get(cur, task_id) if task_id else None
         print(f"任务 {task_id}: {task['state']}" if task else "这个源已经有进行中的任务")
         return

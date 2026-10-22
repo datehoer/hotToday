@@ -114,6 +114,10 @@ export default async function SourceDetail({ params, searchParams }: Props) {
   const lastOkRun = runs.find((r) => r.status === "ok")
   const host = items.map((i) => URL.parse(i.url ?? "")?.host).find(Boolean)
   // Consecutive rounds that wrote nothing, counting back from this one.
+  // A run right after approving a patch is newer than this round; the board catches up next round.
+  const verified = repairs[0]?.verify
+  const verifiedLater =
+    verified && verified.ts > s.run.finished_at ? verified : null
   const streak =
     s.history.length - 1 - s.history.findLastIndex((h) => !failed(h))
 
@@ -183,6 +187,16 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                   ? `已经连续 ${streak} 轮没写入。`
                   : seen.length > 1 &&
                     `之前 ${seen.length - 1} 轮里 ${seen.filter((h) => h.status === "ok").length} 轮正常。`}
+              {verifiedLater && (
+                <>
+                  <br />
+                  {fmtTime(verifiedLater.ts)} 批准补丁后用新代码跑过一次：
+                  {verifiedLater.status === "ok"
+                    ? `${verifiedLater.items} 条，已写入。`
+                    : "还是没写入。"}
+                  这里的状态下一轮才更新。
+                </>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -462,7 +476,7 @@ function RepairCard({
         variant: "default",
         confirm: {
           title: "批准并应用这个补丁？",
-          text: `补丁会写进 sources/${source}/，下一轮开始用新代码。之后可以撤销。`,
+          text: `补丁会写进 sources/${source}/，并立即用新代码跑一次：成功就写进源表，和整点那轮一样。之后可以撤销。`,
         },
       },
       {
@@ -521,6 +535,7 @@ function RepairCard({
               : (r.summary ?? r.log.at(-1)?.note)}
           </p>
         )}
+        {r?.verify && <VerifyRun verify={r.verify} />}
         {!!r?.evidence?.length && (
           <ul className="flex list-disc flex-col gap-1 pl-5 break-all text-muted-foreground">
             {r.evidence.map((e, i) => (
@@ -639,5 +654,36 @@ function RepairCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** The run right after approval: the new code, the real write path, one try within verify.limit seconds. */
+function VerifyRun({ verify: v }: { verify: NonNullable<Repair["verify"]> }) {
+  const ok = v.status === "ok"
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-xl px-3 py-2",
+        ok ? "bg-emerald-500/10" : "bg-destructive/5 text-destructive"
+      )}
+    >
+      {ok ? (
+        <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+      ) : (
+        <RiCloseLine className="mt-0.5 size-4 shrink-0" />
+      )}
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        {fmtTime(v.ts)} 批准后用新代码跑了一次：
+        {ok
+          ? `${v.items} 条，${fmtMs(v.ms)}，已写入源表${v.cleaned ? "并清洗" : `，清洗出错：${v.etl_error}`}。`
+          : v.status === "empty"
+            ? "返回空数据，没写入。"
+            : `出错，没写入：${v.error}。`}
+        {!ok &&
+          /超过 \d+ 秒/.test(v.error ?? "") &&
+          ` 批准时最多等 ${v.limit} 秒，整点那轮按源自己的超时再跑。`}
+        <span className="text-muted-foreground"> 是否恢复看之后的两轮。</span>
+      </span>
+    </div>
   )
 }

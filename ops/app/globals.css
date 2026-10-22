@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --animate-loading-bar: loading-bar 1.2s ease-in-out infinite;
   --font-heading: var(--font-sans);
   --font-sans:
     var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
@@ -129,5 +130,15 @@
     @apply font-sans;
     /* Raleway defaults to old-style figures; numbers here should line up. */
     font-feature-settings: "lnum";
+  }
+}
+
+/* The bar under the header while a page loads (PageSkeleton). */
+@keyframes loading-bar {
+  from {
+    left: -33%;
+  }
+  to {
+    left: 100%;
   }
 }

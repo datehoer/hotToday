@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Fragment } from "react"
 
+import { LinkPending } from "@/components/ops-client"
 import { Badge } from "@/components/ui/badge"
 import {
   Breadcrumb,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Skeleton } from "@/components/ui/skeleton"
 import { phase, type Round, type Run } from "@/lib/ops"
 import { cn, fmtMs, fmtNum, fmtTime } from "@/lib/utils"
 
@@ -130,6 +132,7 @@ export function PillNav({
               {it.count}
             </span>
           )}
+          <LinkPending />
         </Link>
       ))}
     </nav>
@@ -203,6 +206,43 @@ export function PageHeader({
         </span>
       )}
     </header>
+  )
+}
+
+/** The loading.tsx fallback: shown at once while a page's data loads. The header keeps the
+ * sidebar button; a bar runs along under it. */
+export function PageSkeleton() {
+  return (
+    <>
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator
+          orientation="vertical"
+          className="mr-1 data-vertical:h-4 data-vertical:self-auto"
+        />
+        <Skeleton className="h-4 w-28 rounded-full" />
+      </header>
+      <div
+        role="progressbar"
+        aria-label="加载中"
+        className="relative -mt-px h-0.5 overflow-hidden"
+      >
+        <i className="absolute inset-y-0 w-1/3 animate-loading-bar rounded-full bg-primary motion-reduce:animate-none" />
+      </div>
+      <div className="flex flex-col gap-5 p-4 md:p-6">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+        <Skeleton className="h-72" />
+        <Skeleton className="h-44" />
+      </div>
+    </>
   )
 }
 

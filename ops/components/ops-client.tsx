@@ -9,7 +9,7 @@ import {
   RiPulseLine,
   RiSettings3Line,
 } from "@remixicon/react"
-import Link from "next/link"
+import Link, { useLinkStatus } from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   startTransition,
@@ -21,6 +21,7 @@ import {
 } from "react"
 import { Bar, BarChart, Cell, LabelList, XAxis } from "recharts"
 
+import { saveRepairSettings, saveSubpool } from "@/app/(console)/config/actions"
 import { repairAction } from "@/app/(console)/sources/[id]/actions"
 import { login, logout } from "@/app/login/actions"
 import {
@@ -48,6 +49,7 @@ import {
 } from "@/components/ui/chart"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import {
   Sidebar,
   SidebarContent,
@@ -61,6 +63,16 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
+import type {
+  RepairLimit,
+  SpiderConfig,
+  SUBPOOL_FIELDS,
+  SUBPOOL_STRATEGIES,
+  SubpoolKey,
+} from "@/lib/ops"
+import { cn, fmtTime } from "@/lib/utils"
 
 export type RoundBrief = {
   label: string
@@ -286,9 +298,23 @@ export function LoadMore({
       scroll={false}
       className="flex h-11 items-center justify-center text-sm text-muted-foreground hover:text-foreground md:h-9"
     >
-      {pending ? "加载中…" : children}
+      {pending ? (
+        <span className="inline-flex items-center gap-2">
+          <Spinner aria-hidden />
+          加载中…
+        </span>
+      ) : (
+        children
+      )}
     </Link>
   )
+}
+
+/** Inside a <Link> to a view of the same page (?tab=, ?f=): a spinner while it loads. Those
+ * navigations keep the old view until the new one arrives, so loading.tsx doesn't show. */
+export function LinkPending() {
+  const { pending } = useLinkStatus()
+  return pending ? <Spinner aria-label="加载中" className="size-3.5" /> : null
 }
 
 /** No sign-up link: accounts only exist in the server's .env.local. */
@@ -337,6 +363,7 @@ export function LoginForm({ next }: { next: string }) {
             </p>
           )}
           <Button type="submit" disabled={pending} className="h-11 md:h-9">
+            {pending && <Spinner data-icon="inline-start" aria-hidden />}
             {pending ? "登录中…" : "登录"}
           </Button>
         </form>
@@ -391,11 +418,9 @@ export function RepairButtons({
           {o.label}
         </Button>
       ))}
-      {(pending || message) && (
-        <span role="status" className="text-sm text-muted-foreground">
-          {pending ? "处理中…" : message}
-        </span>
-      )}
+      <Pending pending={pending} message={message}>
+        {asking?.op === "approve" ? "应用补丁并用新代码跑一次…" : "处理中…"}
+      </Pending>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -421,5 +446,277 @@ export function RepairButtons({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+/** What a form or button is doing: a spinner and `children` while pending, then the reply. */
+function Pending({
+  pending,
+  message,
+  children,
+}: {
+  pending: boolean
+  message: string | null
+  children: React.ReactNode
+}) {
+  if (!pending && !message) return null
+  return (
+    <span
+      role="status"
+      className="inline-flex items-center gap-2 text-sm text-muted-foreground"
+    >
+      {pending ? (
+        <>
+          <Spinner aria-hidden />
+          {children}
+        </>
+      ) : (
+        message
+      )}
+    </span>
+  )
+}
+
+function Field({
+  id,
+  label,
+  hint,
+  className,
+  children,
+}: {
+  id: string
+  label: string
+  hint?: React.ReactNode
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={cn("flex flex-col gap-1.5", className)}>
+      <Label htmlFor={id}>{label}</Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+// Labels and ranges come from repair.py (settings().ranges); these add what a number means.
+const LIMIT_HINTS: Partial<Record<RepairLimit, string>> = {
+  daily: "调模型的任务，24 小时内算，手动的也算；填 0 不自动分析",
+  dry_run_seconds: "每次试抓",
+}
+
+/** AI repair settings, saved to ops.setting by repair.py inside the spider container. Sent by hand,
+ * not as a form action: React resets a form after its action, which would drop edits a failed save
+ * should keep. */
+export function RepairSettingsForm({
+  settings: r,
+}: {
+  settings: SpiderConfig["repair"]
+}) {
+  const [message, action, pending] = useActionState(saveRepairSettings, null)
+  const prompt = useRef<HTMLTextAreaElement>(null)
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault()
+        const data = new FormData(e.currentTarget)
+        startTransition(() => action(data))
+      }}
+      className="flex flex-col gap-5"
+    >
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Field
+          id="model"
+          label="模型"
+          hint={`api.hotday.uk 上的模型名，默认 ${r.defaults.model}`}
+          className="sm:col-span-2"
+        >
+          <Input
+            id="model"
+            name="model"
+            defaultValue={r.model}
+            autoCapitalize="none"
+            spellCheck={false}
+            className="h-11 font-mono md:h-9"
+          />
+        </Field>
+        {(Object.keys(r.ranges) as RepairLimit[]).map((key) => (
+          <Field
+            key={key}
+            id={key}
+            label={r.ranges[key][2]}
+            hint={[
+              LIMIT_HINTS[key],
+              `${r.ranges[key][0]}–${r.ranges[key][1]}，默认 ${r.defaults[key]}`,
+            ]
+              .filter(Boolean)
+              .join("；")}
+            className={key === "daily" ? "sm:col-span-2" : undefined}
+          >
+            <Input
+              id={key}
+              name={key}
+              type="number"
+              inputMode="numeric"
+              defaultValue={r[key]}
+              className="h-11 tabular-nums md:h-9"
+            />
+          </Field>
+        ))}
+      </div>
+      <Field
+        id="system"
+        label="系统提示词"
+        hint={
+          <>
+            <span className="font-mono">
+              {"{key} {patches} {fetches} {doc}"}
+            </span>{" "}
+            会换成源的 key、补丁和抓网址的次数上限、source.yaml
+            的写法说明（plugins.py 开头那段）。
+            {r.custom_system
+              ? "现在用的是改过的版本。"
+              : "现在用的是 repair.py 里的默认版本。"}
+          </>
+        }
+      >
+        <Textarea
+          ref={prompt}
+          id="system"
+          name="system"
+          defaultValue={r.system}
+          spellCheck={false}
+          className="max-h-[560px] font-mono text-xs leading-5 md:text-xs"
+        />
+      </Field>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending} className="h-11 md:h-9">
+          {pending && <Spinner data-icon="inline-start" aria-hidden />}
+          保存
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={pending}
+          className="h-11 md:h-9"
+          onClick={() => {
+            if (prompt.current) prompt.current.value = r.defaults.system
+          }}
+        >
+          提示词恢复默认
+        </Button>
+        <Pending pending={pending} message={message}>
+          保存中…
+        </Pending>
+        {!pending && !message && r.updated_at && (
+          <span className="text-sm text-muted-foreground">
+            {fmtTime(r.updated_at)} 由 {r.updated_by} 改过
+          </span>
+        )}
+      </div>
+    </form>
+  )
+}
+
+/** subpool's tuning keys; saving rewrites them in subpool.conf and restarts subpool.service. */
+export function SubpoolForm({
+  values,
+  fields,
+  strategies,
+}: {
+  values: Record<SubpoolKey, string>
+  fields: typeof SUBPOOL_FIELDS
+  strategies: typeof SUBPOOL_STRATEGIES
+}) {
+  const [message, action, pending] = useActionState(saveSubpool, null)
+  const form = useRef<HTMLFormElement>(null)
+  const [open, setOpen] = useState(false)
+  return (
+    <form
+      ref={form}
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault()
+        setOpen(true)
+      }}
+      className="flex flex-col gap-5"
+    >
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Field id="s" label="调度策略" className="sm:col-span-2">
+          <NativeSelect
+            id="s"
+            name="s"
+            defaultValue={values.s}
+            className="w-full"
+          >
+            {Object.entries(strategies).map(([v, label]) => (
+              <NativeSelectOption key={v} value={v}>
+                {label}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </Field>
+        {fields.map(({ key, label, hint }) => (
+          <Field key={key} id={key} label={label} hint={hint}>
+            <Input
+              id={key}
+              name={key}
+              type="number"
+              inputMode="numeric"
+              defaultValue={values[key]}
+              className="h-11 tabular-nums md:h-9"
+            />
+          </Field>
+        ))}
+      </div>
+      <Field
+        id="c"
+        label="检测地址"
+        hint="节点健康检测和看门狗都抓它；#expect=200 是期望的状态码"
+      >
+        <Input
+          id="c"
+          name="c"
+          defaultValue={values.c}
+          autoCapitalize="none"
+          spellCheck={false}
+          className="h-11 font-mono md:h-9"
+        />
+      </Field>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending} className="h-11 md:h-9">
+          {pending && <Spinner data-icon="inline-start" aria-hidden />}
+          保存并重启
+        </Button>
+        <Pending pending={pending} message={message}>
+          写入 subpool.conf，重启中…
+        </Pending>
+      </div>
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>保存并重启 subpool？</AlertDialogTitle>
+            <AlertDialogDescription>
+              只改这一栏的设置，订阅和监听不动。重启要重新拉订阅，代理会断开几秒到十几秒，正在用代理的源这一次可能失败；整点刚过时别重启。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setOpen(false)
+                if (form.current) {
+                  const data = new FormData(form.current)
+                  startTransition(() => action(data))
+                }
+              }}
+            >
+              保存并重启
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </form>
   )
 }
