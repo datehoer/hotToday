@@ -1,10 +1,9 @@
 key: wsj
 name: 华尔街日报
-enabled: false
-disabled_reason: "2025-07-21 起停用"
+enabled: true
 schedule: hourly
-timeout: 5m
-retries: 0
+timeout: 60s
+retries: 2
 proxy: none
 
 fetch:

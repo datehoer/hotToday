@@ -1,45 +1,90 @@
-from curl_cffi import requests
-import pyquery
-from urllib.parse import urljoin
-def get_wsj_data():
-    url = "https://www.wsj.com/news/latest-headlines?mod=nav_top_section"
-    headers = {
-        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
-        'cache-control': 'no-cache',
-        'pragma': 'no-cache',
-        'priority': 'u=0, i',
-        'referer': 'https://www.wsj.com/tech/personal-tech/meta-orion-smart-glasses-tested-2eec7bef?mod=latest_headlines',
-        'sec-ch-device-memory': '8',
-        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-        'sec-ch-ua-arch': '"x86"',
-        'sec-ch-ua-full-version-list': '"Google Chrome";v="131.0.6778.140", "Chromium";v="131.0.6778.140", "Not_A Brand";v="24.0.0.0"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-model': '""',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'document',
-        'sec-fetch-mode': 'navigate',
-        'sec-fetch-site': 'same-origin',
-        'sec-fetch-user': '?1',
-        'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    }
-    session = requests.Session()
-    session.get(url, headers=headers, timeout=30, impersonate="chrome99")
-    res = session.get(url, headers=headers, timeout=30, impersonate="chrome99")
-    doc = pyquery.PyQuery(res.text)
-    items = doc("h1~div h3>a").items()
-    data = []
+"""华尔街日报: 抓 Google News 用的新闻 sitemap (只有标题、链接、发布时间)。
 
-    for item in items:
-        title = item.find("div").text()
-        if title == "":
+页面本身 (news/latest-headlines、旧 xml/rss) 被 DataDome 挡着, 直连和 subpool
+都是 401 + "Please enable JS and disable any ad blocker"; feeds.a.dj.com 的官方
+RSS 停在 2025-01-27 不再更新。sitemap 还开着, 而且正好是标题 + 链接 + 发布时间,
+不碰正文。
+"""
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+from curl_cffi import requests
+
+SITEMAPS = [
+    "https://www.wsj.com/wsjsitemaps/wsj_google_news.xml",
+    "https://www.wsj.com/live_news_sitemap.xml",
+]
+NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+      "news": "http://www.google.com/schemas/sitemap-news/0.9"}
+LIMIT = 50
+# livecoverage 里的 /card/ 是直播间的碎碎念, 不是文章
+SKIP_MARKERS = ("/card/",)
+# 行业付费刊物 (Pro/Buyside 之类), 不是给热榜读者的
+SKIP_SECTIONS = {"pro", "wsj-pro", "buyside", "cmo-today", "cio-journal", "cfo-journal",
+                 "risk-compliance-journal", "logistics-report"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
+    "Accept": "application/xml,text/xml,*/*",
+}
+
+
+def _when(url):
+    """发布时间, 解析不出来排到最后"""
+    raw = (url.findtext("news:news/news:publication_date", namespaces=NS)
+           or url.findtext("sm:lastmod", namespaces=NS) or "")
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _entries(xml_text):
+    root = ET.fromstring(xml_text)
+    out = []
+    for url in root.findall("sm:url", NS):
+        title = (url.findtext("news:news/news:title", namespaces=NS) or "").strip()
+        link = (url.findtext("sm:loc", namespaces=NS) or "").strip()
+        if title and link:
+            out.append((title, link, _when(url)))
+    return out
+
+
+def _wanted(link):
+    tail = link.split("wsj.com", 1)[-1]
+    parts = [p for p in tail.split("/") if p]
+    if any(marker in tail for marker in SKIP_MARKERS):
+        return False
+    return not (parts and parts[0] in SKIP_SECTIONS)
+
+
+def get_wsj_data(proxy=None):
+    kwargs = {"proxies": {"http": proxy, "https": proxy}} if proxy else {}
+    errors = []
+    entries = []
+    for sitemap in SITEMAPS:
+        try:
+            res = requests.get(sitemap, headers=HEADERS, timeout=30, impersonate="chrome", **kwargs)
+            res.raise_for_status()
+            entries = _entries(res.text)
+        except Exception as err:
+            errors.append(f"{sitemap.split('/')[-1]}: {err}")
             continue
-        link = urljoin(url, item.attr("href"))
-        hotScore = 0
-        data.append({
-            "title": title,
-            "url": link,
-            "hotScore": hotScore
-        })
+        if entries:
+            break
+    if not entries:
+        raise RuntimeError("; ".join(errors) or "sitemap 里没有条目")
+
+    entries.sort(key=lambda e: e[2], reverse=True)
+    data, seen_title, seen_url = [], set(), set()
+    for title, link, _ in entries:
+        if not _wanted(link):
+            continue
+        if title in seen_title or link in seen_url:
+            continue
+        seen_title.add(title)
+        seen_url.add(link)
+        data.append({"title": title, "url": link, "hotScore": 0})
+        if len(data) >= LIMIT:
+            break
     return {"data": data}
