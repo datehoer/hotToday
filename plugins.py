@@ -14,16 +14,27 @@ extract 把存下的数据提成 (title, url, heat), 清洗 (etl/incremental.py)
           从左到右取第一个非空值 (None 和空串算空); template 里 {路径|quote} 会做 URL 编码;
           后面可以接 | regex('…'), 取第一个分组 (没有分组取整个匹配)。引号里的内容原样使用
   generic_fallback  按配置提不出条目时, 是否在整份数据里找标题兜底, 默认 true
+
+requires 写这个源在镜像里要有的东西, 构建镜像时装好; 改了 requires 要重建镜像, 只改目录里的代码不用:
+  bin  要调用的程序, 比如 [node]
+  pip  requirements.txt 以外、只有这个源要的 Python 包, 比如 [foo==1.2]
+  env  镜像要设的环境变量, 只能是装好的东西在哪 (名字以 _PATH/_BIN/_HOME/_DIR 结尾): AI 修复的沙箱也拿到它们
+缺了哪样, 这个源这一轮记成「缺少依赖 …, 要重建镜像」, 别的源照常跑。
+出错就抛异常: except 之后返回空数据, 这一轮只能记成 empty, 看不到原因。
 """
+import ast
 import html
 import importlib.util
 import inspect
+import os
 import random
 import re
+import shutil
 import sys
 import threading
 import time
 from functools import lru_cache
+from importlib import metadata
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
@@ -44,7 +55,10 @@ UA = {
                "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"),
 }
 FIELDS = {"key", "name", "enabled", "disabled_reason", "schedule", "timeout", "retries", "proxy",
-          "fetch", "extract"}
+          "requires", "fetch", "extract"}
+# requires 的每一项: (格式, 例子)
+REQUIRES = {"bin": (r"[\w.+-]+", "[node]"), "pip": (r"[A-Za-z0-9][\w.-]*(==[\w.+!-]+)?", "[foo==1.2]"),
+            "env": (r"[A-Z][A-Z0-9_]*_(PATH|BIN|HOME|DIR)", "[WAF_NODE_PATH], 名字以 _PATH/_BIN/_HOME/_DIR 结尾")}
 FETCH_FIELDS = {
     "json": {"type", "url", "vars", "headers", "impersonate"},
     "rss": {"type", "url"},
@@ -109,6 +123,7 @@ def _load(folder, import_entries):
     proxy = spec.setdefault("proxy", "none")
     if proxy != "none" and proxy not in PROXIES:
         raise SpecError(f"proxy {proxy!r} 不在 config.PROXIES 里")
+    spec["requires"] = _requires(spec.get("requires"))
 
     fetch = spec.get("fetch")
     kind = fetch.get("type") if isinstance(fetch, dict) else None
@@ -116,7 +131,8 @@ def _load(folder, import_entries):
         raise SpecError("fetch.type 要是 json、rss 或 python")
     _known(fetch, FETCH_FIELDS[kind], "fetch.")
     if kind == "python":
-        spec["func"] = _entry(folder, fetch.get("entry"), proxy) if import_entries else None
+        # 缺依赖时不导入 (模块顶上 import 缺的包会报错), 留给 fetch 报「缺少依赖」
+        spec["func"] = _entry(folder, fetch.get("entry"), proxy) if import_entries and not missing(spec) else None
     else:
         if not isinstance(fetch.get("url"), str) or not fetch["url"].startswith("https://"):
             raise SpecError("fetch.url 要是 https 地址")
@@ -138,6 +154,61 @@ def _known(obj, allowed, prefix):
     unknown = sorted(str(k) for k in obj if k not in allowed)
     if unknown:
         raise SpecError("不认识的字段: " + ", ".join(prefix + k for k in unknown))
+
+
+def _requires(req):
+    """requires 规整成 {bin: [...], pip: [...], env: [...]}"""
+    if req is None:
+        req = {}
+    if not isinstance(req, dict):
+        raise SpecError("requires 要是键值对, 比如 requires: {bin: [node]}")
+    _known(req, REQUIRES, "requires.")
+    out = {}
+    for name, (pattern, example) in REQUIRES.items():
+        items = req.get(name, [])
+        if not isinstance(items, list) or not all(isinstance(x, str) and re.fullmatch(pattern, x) for x in items):
+            raise SpecError(f"requires.{name} 要是一个列表, 比如 {example}")
+        out[name] = items
+    return out
+
+
+def missing(spec):
+    """requires 里写了、镜像里没有的东西; 空列表就是齐了"""
+    req = spec["requires"]
+    lack = [f"程序 {name}" for name in req["bin"] if not shutil.which(name)]
+    for package in req["pip"]:
+        name, _, want = package.partition("==")
+        try:
+            have = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            lack.append(f"Python 包 {package}")
+            continue
+        if want and have != want:
+            lack.append(f"Python 包 {package} (镜像里是 {have})")
+    return lack + [f"环境变量 {name}" for name in req["env"] if not os.environ.get(name)]
+
+
+def hides_errors(code):
+    """except 之后不再抛出、只返回空数据的行号。这样写, 出错时 task.py 只能记成 empty, 看不到原因"""
+    def empty(node):
+        if node is None or isinstance(node, ast.Constant) and node.value in (None, "", 0, False):
+            return True
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            return not node.elts
+        if isinstance(node, ast.Dict):  # {} 和 {"data": []}
+            return all(isinstance(v, (ast.List, ast.Dict)) and empty(v) for v in node.values)
+        return isinstance(node, ast.Call) and getattr(node.func, "id", None) in ("list", "dict") and not node.args
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+    lines = []
+    for handler in ast.walk(tree):
+        if isinstance(handler, ast.ExceptHandler) and not any(isinstance(n, ast.Raise) for n in ast.walk(handler)):
+            returns = [n for n in ast.walk(handler) if isinstance(n, ast.Return)]
+            if returns and all(empty(r.value) for r in returns):
+                lines.append(handler.lineno)
+    return lines
 
 
 def _seconds(text):
@@ -173,6 +244,9 @@ def _entry(folder, entry, proxy):
 
 def fetch(spec):
     """按 spec 抓一次, 出错按 retries 重试; 全部失败时抛出最后一次的错误"""
+    lack = missing(spec)
+    if lack:
+        raise RuntimeError(f"缺少依赖: {', '.join(lack)}; 要重建镜像")
     for left in range(spec["retries"], -1, -1):
         try:
             return _fetch_once(spec)

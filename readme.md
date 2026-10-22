@@ -112,11 +112,14 @@ todo:
 - 停用一个源：`enabled: false`，并写 `disabled_reason`
 - 新源第一次写入时自动建表，清洗也按 `extract` 提取，不用再改 `task.py` 或别的文件
 - 校验：`python task.py --check`；只抓不写库：`python task.py --only <key> …`；当前生效的源、代理和 AI 修复设置（JSON，运维页的「配置」读它）：`python task.py --config`
+- 改源目录里的代码或 `source.yaml` 不用重建镜像：容器把仓库挂在 `/app`，每个整点重新启动 `task.py`，下一轮就用新代码
+- 源要镜像里另装的东西（比如雪球要 node 和 jsdom）写在 `source.yaml` 的 `requires`（`bin` 程序、`pip` Python 包、`env` 环境变量，见 `plugins.py` 开头），并在 `Dockerfile` 里装好；改了 `requires` 或这些依赖要重建镜像。镜像里缺了，这个源记成「缺少依赖 …，要重建镜像」，别的源照常跑，`--check` 也会列出来
+- 出错要抛异常，不要 `except` 之后返回空数据：那样只会记成 empty，看不到原因，AI 修复也会当成结构问题去改；`--check` 会列出这种写法
 - `proxy: subpool` 走 `config.PROXIES` 里的 subpool 代理池（`/srv/projects/subpool`，systemd 服务 `subpool`，自带看门狗），运维页「状态」能看到它的节点和探测结果
 
 ## AI 修复 (repair.py)
 
-每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上这类记为运维处理；用代理或浏览器的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 4 个）。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，并立即用新代码跑一次（成功就写进源表），也能撤销。模型、接口地址、限额和系统提示词存在 `ops.setting`，在运维页「配置 → AI 修复」改；密钥不进库，在 `.env`（`HOT_REPAIR_KEY`，没有就用 `HOT_EMBED_KEY`），运维页也能改，`repair.py` 每次调模型都重新读这个文件。命令见 `repair.py` 开头。
+每轮结束后，连续两轮失败的源自动开一个修复任务：代理、超时、连不上、镜像缺依赖这类记为运维处理；用代理、浏览器或 node 这类外部程序的源交给人；其余交给模型（默认 `deepseek-v4-pro`，24 小时内最多 4 个）。模型的补丁先在沙箱里试抓，检查全部通过后在运维页（ops.example.com）等人批准，批准后才写进 `sources/<key>/`，并立即用新代码跑一次（成功就写进源表），也能撤销。模型、接口地址、限额和系统提示词存在 `ops.setting`，在运维页「配置 → AI 修复」改；密钥不进库，在 `.env`（`HOT_REPAIR_KEY`，没有就用 `HOT_EMBED_KEY`），运维页也能改，`repair.py` 每次调模型都重新读这个文件。命令见 `repair.py` 开头。
 
 ## 运维中台 (ops/)
 

@@ -4,7 +4,7 @@ ops.example.com：hotToday 每小时一轮抓取的运维看板（概况 / 源 /
 
 - 数据：`ops.round` / `ops.run` 由上一级的 `task.py` 每轮写入；另读各源表和 `hot_topic`。连接参数在 `.env.local`（PG*，只读账号 hotrank_readonly）。
 - 状态页现查三样：subpool 代理池的统计接口（`SUBPOOL_STATS`，默认 `http://127.0.0.1:9090/stats`）、PostgreSQL（同一个只读账号）、Redis 的 INFO（`.env.local` 里的 `REDIS_URL`）。
-- 配置页在爬虫容器里跑 `python task.py --config`（约 1 秒）；源详情页的「配置」直接读 `HOTTODAY_DIR`（默认 `/srv/projects/hotToday`，即本仓库）下的 `sources/<key>/`，写死的 cookie 和 token 不显示，只读。这个站自己不写库：AI 修复的批准（批准后立即跑一次那个源）、驳回、撤销和「配置 → AI 修复」的保存都在容器里跑 `repair.py`；填了密钥时，它另写上一级 `.env` 的 `HOT_REPAIR_KEY` 一行。「配置 → 代理池」读 `SUBPOOL_CONF`（默认 `/srv/projects/subpool/subpool.conf`），保存时只改调度和检测那几项，再 `sudo -n systemctl restart subpool`；订阅能添加、替换、删除（新链接先试着打开，subpool 用新文件起不来就改回原文件再重启）。订阅链接和监听账号不发到浏览器，只显示域名。
+- 配置页在爬虫容器里跑 `python task.py --config`（约 1 秒）；源详情页的「配置」直接读 `HOTTODAY_DIR`（默认 `/srv/projects/hotToday`，即本仓库）下的 `sources/<key>/`，写死的 cookie 和 token 不显示，只读。这个站自己不写库：AI 修复的批准（批准后立即跑一次那个源）、驳回、撤销和「配置 → AI 修复」的保存都在容器里跑 `repair.py`；填了密钥时，它另写上一级 `.env` 的 `HOT_REPAIR_KEY` 一行。「配置 → 代理池」读 `SUBPOOL_CONF`（默认 `/srv/projects/subpool/subpool.conf`），保存时只改调度和检测那几项，再 `sudo -n systemctl restart subpool`；订阅能添加、替换、删除（新链接先试着打开，subpool 用新文件起不来就改回原文件再重启）。订阅链接完整显示（含 token，登录后才看得到）；监听账号不发到浏览器。
 - 运行：`hottoday-ops.service`（`/etc/systemd/system/`，openclaw 用户在本目录跑 `next start -H 127.0.0.1 -p 3210`），nginx 反代，见 `/etc/nginx/conf.d/ops.example.com.conf`。
 - 改完代码，在本目录：`pnpm build && sudo systemctl restart hottoday-ops`。爬虫镜像不含本目录（见上一级的 `.dockerignore`）。pnpm 通过 corepack 装在 `~/.local/bin`。
 - 登录：只有一个账号，配置在 `.env.local`（`AUTH_USER`、`AUTH_PASSWORD_HASH`、`AUTH_SECRET`），没有注册入口。`proxy.ts` 把未登录的请求转到 `/login`，`(console)` 下的页面和每次查库前还会再检查一次。

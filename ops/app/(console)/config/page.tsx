@@ -54,6 +54,7 @@ type Tab = keyof typeof TABS
 
 // repair.py names its rules in Chinese; the English names go by reason code.
 const RULE_NAMES: Record<string, string> = {
+  missing_dep: "Image lacks a dependency; rebuild it",
   proxy_error: "Proxy unreachable",
   fetch_timeout: "Timed out",
   http_5xx: "Server error (5xx)",

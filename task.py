@@ -4,7 +4,7 @@
 
     python task.py                                     跑一轮 (容器每个整点调用)
     python task.py --only weibo_hot_search douyin_hot  只抓不写库, 用来试跑
-    python task.py --check                             只校验全部 source.yaml
+    python task.py --check                             校验全部 source.yaml, 列出镜像缺的依赖
     python task.py --config                            打印当前生效的配置 (JSON, 运维页的配置页读它)
 """
 import argparse
@@ -249,14 +249,25 @@ def try_sources(keys):
 
 
 def check_sources():
-    """校验全部 source.yaml, 有错时返回 1"""
+    """校验全部 source.yaml, 有错时返回 1; 也列出镜像里缺的依赖和会把错误藏起来的 except"""
     specs, bad = plugins.load_sources()
     for key, error in bad.items():
         print(f"{key}: {error}")
+    lacking = 0
+    for spec in specs:
+        lack = plugins.missing(spec)
+        if lack:
+            lacking += 1
+            print(f"{spec['key']}: 缺少依赖 {', '.join(lack)}, 要重建镜像")
+        for path in sorted((plugins.SOURCES_DIR / spec["key"]).rglob("*.py")):
+            if "node_modules" not in path.parts:
+                for line in plugins.hides_errors(path.read_text(encoding="utf-8")):
+                    print(f"{spec['key']}: {path.relative_to(plugins.SOURCES_DIR)}:{line} "
+                          "except 之后返回空数据, 出错会记成 empty")
     enabled = sum(spec["enabled"] for spec in specs)
     print(f"{len(specs) + len(bad)} 个源: {enabled} 个启用, {len(specs) - enabled} 个停用, "
-          f"{len(bad)} 个配置错误")
-    return 1 if bad else 0
+          f"{len(bad)} 个配置错误, {lacking} 个缺依赖")
+    return 1 if bad or lacking else 0
 
 
 def print_config():
@@ -276,7 +287,7 @@ def print_config():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", nargs="+", metavar="KEY", help="只抓这几个源, 不写库也不跑清洗")
-    parser.add_argument("--check", action="store_true", help="只校验 sources/*/source.yaml")
+    parser.add_argument("--check", action="store_true", help="校验 sources/*/source.yaml, 列出镜像缺的依赖")
     parser.add_argument("--config", action="store_true", help="打印当前生效的配置 (JSON)")
     args = parser.parse_args()
     if args.check:
