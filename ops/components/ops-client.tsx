@@ -783,7 +783,7 @@ export function RepairButtons({
 }
 
 /** The message box of an AI agent chat, or of a new one (id null; the page moves to it once it exists).
- * Ctrl/⌘+Enter sends; the examples fill the box. */
+ * Enter sends, Shift+Enter breaks the line; the examples fill the box. */
 export function ChatComposer({
   id,
   busy,
@@ -825,8 +825,15 @@ export function ChatComposer({
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
+        enterKeyHint="send"
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          // an Enter that picks an IME candidate must not send (Safari reports it as keyCode 229)
+          if (
+            e.key === "Enter" &&
+            !e.shiftKey &&
+            !e.nativeEvent.isComposing &&
+            e.keyCode !== 229
+          ) {
             e.preventDefault()
             send()
           }
