@@ -1,3 +1,4 @@
+import { RiCheckLine, RiCloseLine } from "@remixicon/react"
 import Link from "next/link"
 import { Fragment } from "react"
 
@@ -29,6 +30,7 @@ import {
   phase,
   PHASE,
   REPAIR_STATE,
+  type Check,
   type Repair,
   type RepairState,
   type Round,
@@ -737,5 +739,103 @@ export async function RepairTimeline({
         </li>
       ))}
     </ol>
+  )
+}
+
+/** A patch's checks, as repair.py wrote them (in Chinese). */
+export function Checks({ checks }: { checks: Check[] }) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {checks.map((c) => (
+        <li key={c.name} className="flex items-start gap-2">
+          {c.ok ? (
+            <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+          ) : (
+            <RiCloseLine className="mt-0.5 size-4 shrink-0 text-destructive" />
+          )}
+          <span className="shrink-0 font-medium">{c.name}</span>
+          <span className="break-all text-muted-foreground">{c.note}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** A patch's crawl in the sandbox: the result and the first five titles. */
+export async function DryRun({ run }: { run: NonNullable<Repair["dry_run"]> }) {
+  const t = await getT()
+  const link = (u: string | null) => (u && /^https?:\/\//.test(u) ? u : null)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="font-medium">
+        {t("Sandbox crawl: ", "沙箱试抓：")}
+        {run.status}
+        {run.items != null &&
+          t(
+            `, ${count(run.items, "item")} extracted`,
+            `，提取到 ${run.items} 条`
+          )}
+        {run.ms != null && t(", ", "，") + t.ms(run.ms)}
+      </span>
+      {run.error && (
+        <span className="font-mono text-xs break-all text-muted-foreground">
+          {run.error}
+        </span>
+      )}
+      <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
+        {run.sample?.slice(0, 5).map(([title, url], i) => (
+          <li key={i}>
+            {link(url) ? (
+              <a
+                href={link(url)!}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
+                {title}
+              </a>
+            ) : (
+              title
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/** A unified diff, collapsible: added lines green, removed ones red. */
+export async function PatchDiff({
+  diff,
+  open,
+}: {
+  diff: string
+  open?: boolean
+}) {
+  const t = await getT()
+  return (
+    <details open={open} className="group">
+      <summary className="cursor-pointer font-medium">
+        {t("Patch", "补丁")}
+      </summary>
+      <pre className="mt-2 max-h-[480px] w-0 min-w-full overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5">
+        <span className="block w-max min-w-full">
+          {diff.split("\n").map((line, i) => (
+            <span
+              key={i}
+              className={cn(
+                "block",
+                /^\+(?!\+\+)/.test(line) &&
+                  "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                /^-(?!--)/.test(line) && "bg-destructive/10 text-destructive",
+                line.startsWith("@@") && "text-muted-foreground"
+              )}
+            >
+              {line || " "}
+            </span>
+          ))}
+        </span>
+      </pre>
+    </details>
   )
 }

@@ -436,6 +436,76 @@ export async function getRunsAfter(repairs: Repair[]) {
   return Map.groupBy(rows as (Run & { repair: number })[], (r) => r.repair)
 }
 
+// The AI agent page (ops.chat): repair.py's Chat writes every message, step and reply. A passing patch
+// is the chat's proposal until someone applies it; its files (full texts, real cookies included) stay
+// in the database, the page gets the diff.
+export type ChatEvent = {
+  ts: number
+  kind: "user" | "step" | "reply" | "error" | "applied"
+  by?: string // user, applied
+  text?: string // user, reply, error, applied (repair.py's result line)
+  tool?: string // step
+  note?: string // step
+  task?: number // applied: the repair task it became
+}
+export type Proposal = Pick<Repair, "checks" | "dry_run" | "diff"> & {
+  key: string
+  new: boolean // creates sources/<key>/
+  ts: number
+  note: string
+  task?: number // set once applied, with applied_at and applied_by
+  applied_at?: number
+  applied_by?: string
+}
+export type Chat = {
+  id: number
+  title: string
+  created_by: string
+  state: "thinking" | "idle"
+  deadline: number | null // past it, a "thinking" chat was interrupted
+  source: string | null
+  events: ChatEvent[]
+  proposal: Proposal | null
+  model: string | null
+  tokens: number
+  created_at: number
+  updated_at: number
+}
+export type ChatBrief = Omit<Chat, "events" | "proposal"> & {
+  proposal: "pending" | "applied" | null
+}
+
+/** The model is still on the latest message (not yet past the deadline repair.py gives up by). */
+export const isThinking = (c: Pick<Chat, "state" | "deadline">) =>
+  c.state === "thinking" && (c.deadline ?? 0) > Date.now() / 1000
+
+export const getChats = (limit: number) =>
+  ifRepairs(
+    () =>
+      query<ChatBrief>(
+        `select id, title, created_by, state, deadline, source, model, tokens, created_at, updated_at,
+                case when proposal ? 'task' then 'applied' when proposal is not null then 'pending' end as proposal
+           from ops.chat order by updated_at desc limit ${Math.trunc(limit)}`
+      ),
+    []
+  )
+
+export const getChat = (id: number) =>
+  ifRepairs(async () => {
+    const [c] = await query<Chat>(
+      `select id, title, created_by, state, deadline, source, events, proposal - 'files' as proposal,
+              model, tokens, created_at, updated_at
+         from ops.chat where id = $1`,
+      [id]
+    )
+    if (!c) return null
+    // Like queryRepairs: IPs masked everywhere but in the diff
+    const diff = c.proposal?.diff ?? null
+    const masked = JSON.parse(maskIp(JSON.stringify(c))) as Chat
+    if (masked.proposal) masked.proposal.diff = diff
+    return masked
+  }, null)
+
 // The spider's configuration as it sees it: `task.py --config` inside the container validates every
 // source.yaml and reports the AI repair settings (ops.setting merged with repair.py's defaults; no
 // passwords or keys). Takes about a second.

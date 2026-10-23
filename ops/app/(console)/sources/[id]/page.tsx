@@ -18,9 +18,12 @@ import {
   type RepairOp,
 } from "@/components/ops-client"
 import {
+  Checks,
+  DryRun,
   modelLine,
   PageHeader,
   PageTitle,
+  PatchDiff,
   RepairBadge,
   RepairTimeline,
   SourceStatus,
@@ -590,7 +593,6 @@ async function RepairCard({
       },
     })
   const by = r?.log[0]?.by
-  const link = (u: string | null) => (u && /^https?:\/\//.test(u) ? u : null)
 
   return (
     <Card>
@@ -648,85 +650,10 @@ async function RepairCard({
             ))}
           </ul>
         )}
-        {!!r?.checks?.length && (
-          <ul className="flex flex-col gap-1.5">
-            {r.checks.map((c) => (
-              <li key={c.name} className="flex items-start gap-2">
-                {c.ok ? (
-                  <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <RiCloseLine className="mt-0.5 size-4 shrink-0 text-destructive" />
-                )}
-                <span className="shrink-0 font-medium">{c.name}</span>
-                <span className="break-all text-muted-foreground">
-                  {c.note}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {r?.dry_run && (
-          <div className="flex flex-col gap-1.5">
-            <span className="font-medium">
-              {t("Sandbox crawl: ", "沙箱试抓：")}
-              {r.dry_run.status}
-              {r.dry_run.items != null &&
-                t(
-                  `, ${count(r.dry_run.items, "item")} extracted`,
-                  `，提取到 ${r.dry_run.items} 条`
-                )}
-              {r.dry_run.ms != null && t(", ", "，") + t.ms(r.dry_run.ms)}
-            </span>
-            {r.dry_run.error && (
-              <span className="font-mono text-xs break-all text-muted-foreground">
-                {r.dry_run.error}
-              </span>
-            )}
-            <ol className="flex list-decimal flex-col gap-1 pl-5 text-muted-foreground">
-              {r.dry_run.sample?.slice(0, 5).map(([title, url], i) => (
-                <li key={i}>
-                  {link(url) ? (
-                    <a
-                      href={link(url)!}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="hover:underline"
-                    >
-                      {title}
-                    </a>
-                  ) : (
-                    title
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
+        {!!r?.checks?.length && <Checks checks={r.checks} />}
+        {r?.dry_run && <DryRun run={r.dry_run} />}
         {r?.diff && (
-          <details open={r.state === "awaiting_review"} className="group">
-            <summary className="cursor-pointer font-medium">
-              {t("Patch", "补丁")}
-            </summary>
-            <pre className="mt-2 max-h-[480px] w-0 min-w-full overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5">
-              <span className="block w-max min-w-full">
-                {r.diff.split("\n").map((line, i) => (
-                  <span
-                    key={i}
-                    className={cn(
-                      "block",
-                      /^\+(?!\+\+)/.test(line) &&
-                        "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-                      /^-(?!--)/.test(line) &&
-                        "bg-destructive/10 text-destructive",
-                      line.startsWith("@@") && "text-muted-foreground"
-                    )}
-                  >
-                    {line || " "}
-                  </span>
-                ))}
-              </span>
-            </pre>
-          </details>
+          <PatchDiff diff={r.diff} open={r.state === "awaiting_review"} />
         )}
         {!!r?.steps.length && (
           <details>

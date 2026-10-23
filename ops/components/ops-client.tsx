@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  RiChatAiLine,
   RiCheckLine,
   RiDashboardLine,
   RiDatabase2Line,
@@ -10,6 +11,7 @@ import {
   RiLogoutBoxRLine,
   RiPulseLine,
   RiRobot2Line,
+  RiSendPlane2Line,
   RiSettings3Line,
   RiTranslate2,
 } from "@remixicon/react"
@@ -43,7 +45,7 @@ import {
   saveSubpool,
   testModel,
 } from "@/app/(console)/config/actions"
-import { repairAction } from "@/app/(console)/sources/[id]/actions"
+import { chatAction, repairAction } from "@/app/(console)/sources/[id]/actions"
 import { login, logout, setLang } from "@/app/login/actions"
 import {
   AlertDialog,
@@ -169,6 +171,7 @@ const NAV = [
   { href: "/sources", label: ["Sources", "源"], icon: RiDatabase2Line },
   { href: "/runs", label: ["Rounds", "运行"], icon: RiHistoryLine },
   { href: "/repairs", label: ["AI repair", "AI 修复"], icon: RiRobot2Line },
+  { href: "/agent", label: ["AI agent", "AI 助手"], icon: RiChatAiLine },
   { href: "/status", label: ["Status", "状态"], icon: RiPulseLine },
   { href: "/config", label: ["Config", "配置"], icon: RiSettings3Line },
 ] as const
@@ -718,7 +721,7 @@ export function LoginForm({ next }: { next: string }) {
 }
 
 export type RepairOp = {
-  op: "approve" | "reject" | "revert" | "run"
+  op: "approve" | "reject" | "revert" | "run" | "apply-chat"
   label: string
   /** The dialog's question before sending */
   confirm: { title: string; text: string }
@@ -740,6 +743,13 @@ const REPAIR_BUSY: Record<
   reject: [["Rejecting", "正在驳回"]],
   revert: [["Reverting the patch", "正在撤销补丁"]],
   run: [["Starting the analysis", "正在开始分析"]],
+  "apply-chat": [
+    ["Applying the change", "正在应用改动"],
+    [
+      "It goes into sources/, then the source runs once with the new code, at most 40 s",
+      "写进 sources/ 后用新代码跑一次这个源，最多 40 秒",
+    ],
+  ],
 }
 
 /** Buttons for one repair task, or for starting one; the reply is repair.py's last output line. */
@@ -790,6 +800,116 @@ export function RepairButtons({
         }}
       />
     </div>
+  )
+}
+
+/** The message box of an AI agent chat, or of a new one (id null; the page moves to it once it exists).
+ * Ctrl/⌘+Enter sends; the examples fill the box. */
+export function ChatComposer({
+  id,
+  busy,
+  examples = [],
+}: {
+  id: number | null
+  busy: boolean // the model is still on the last message
+  examples?: string[]
+}) {
+  const t = useT()
+  const router = useRouter()
+  const [text, setText] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, start] = useTransition()
+  const send = () => {
+    if (!text.trim() || pending || busy) return
+    setError(null)
+    start(async () => {
+      const form = new FormData()
+      form.set("id", id ? String(id) : "new")
+      form.set("text", text)
+      const r = await chatAction(form).catch((e: Error): Reply => ({
+        ok: false,
+        text: e.message,
+      }))
+      if (!r.ok) return setError(r.text)
+      setText("")
+      if (!id && "id" in r) router.push(`/agent?c=${r.id}`)
+    })
+  }
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        send()
+      }}
+      className="flex flex-col gap-2"
+    >
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            send()
+          }
+        }}
+        maxLength={4000}
+        aria-label={t("Message", "消息")}
+        placeholder={
+          id
+            ? t(
+                "Ask a follow-up, or ask for another change… (don't paste cookies or passwords)",
+                "接着问，或者让它改别的……（别贴 cookie 和密码）"
+              )
+            : t(
+                "Ask why a source fails, or describe a source to add… (don't paste cookies or passwords)",
+                "问一个源为什么出错，或者说要加什么源……（别贴 cookie 和密码）"
+              )
+        }
+        className="max-h-60 min-h-20"
+      />
+      {!text && examples.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {examples.map((x) => (
+            <Button
+              key={x}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setText(x)}
+            >
+              {x}
+            </Button>
+          ))}
+        </div>
+      )}
+      {error && (
+        <p className="text-sm [overflow-wrap:anywhere] text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">
+          {busy
+            ? t("Wait for the reply before sending more", "等它回完再发下一条")
+            : t(
+                "Replies in the language you write in · Ctrl+Enter sends",
+                "用你写的语言回复 · Ctrl+Enter 发送"
+              )}
+        </span>
+        <Button
+          type="submit"
+          disabled={!text.trim() || pending || busy}
+          className="h-11 md:h-9"
+        >
+          {pending ? (
+            <Spinner data-icon="inline-start" aria-hidden />
+          ) : (
+            <RiSendPlane2Line data-icon="inline-start" />
+          )}
+          {t("Send", "发送")}
+        </Button>
+      </div>
+    </form>
   )
 }
 
