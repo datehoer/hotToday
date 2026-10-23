@@ -23,8 +23,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -60,6 +62,9 @@ export default async function Agent({
     getChats(50),
     id ? getChat(id) : null,
   ])
+  // A chat fills the window at every width, the new-chat view from lg up, and each pane scrolls
+  // inside; on phones the new-chat card and the list stack at their own height.
+  const fill = id ? "min-h-0 grow basis-0" : "lg:min-h-0 lg:grow lg:basis-0"
 
   return (
     <>
@@ -67,57 +72,54 @@ export default async function Agent({
         crumbs={[[t("Ops", "运维"), "/"], [t("AI agent", "AI 助手")]]}
       />
       {chat && isThinking(chat) && <AutoRefresh seconds={4} />}
-      <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle
-          title={t("AI agent", "AI 助手")}
-          aside={
-            id && (
-              <Button
-                variant="outline"
-                nativeButton={false}
-                render={<Link href="/agent" />}
-              >
-                <RiAddLine data-icon="inline-start" />
-                {t("New chat", "新对话")}
-              </Button>
-            )
-          }
-        />
-        <div className="grid items-start gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <div className={cn("flex flex-col gap-5 p-4 md:p-6", fill)}>
+        {/* On a phone an open chat needs the height; the heading stays for screen readers */}
+        <div className={cn(id && "max-lg:sr-only")}>
+          <PageTitle title={t("AI agent", "AI 助手")} />
+        </div>
+        <div className={cn("flex gap-4 max-lg:flex-col", fill)}>
           <ChatList
             chats={chats}
             current={id}
-            className={cn(id ? "max-lg:hidden" : "max-lg:order-2")}
+            className={cn(
+              "lg:w-72 lg:shrink-0",
+              id ? "max-lg:hidden" : "max-lg:order-2"
+            )}
           />
           {chat ? (
-            <Thread chat={chat} />
-          ) : id ? (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                {t("No such chat", "没有这个对话")}
-              </CardContent>
-            </Card>
+            <Thread chat={chat} className={cn("min-w-0", fill)} />
           ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("New chat", "新对话")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ChatComposer
-                  id={null}
-                  busy={false}
-                  examples={[
-                    t(
-                      "google_search is disabled. Can it be fixed?",
-                      "google_search 停用了，看看能不能修好"
-                    ),
-                    t(
-                      "Add a source for the front page of lobste.rs",
-                      "加一个 lobste.rs 首页最热的源"
-                    ),
-                    t("Can freebuf be crawled again?", "freebuf 还能抓吗？"),
-                  ]}
-                />
+            <Card className={cn("min-w-0", fill)}>
+              <CardContent className="flex flex-1 flex-col items-center justify-center">
+                {id ? (
+                  <p className="text-sm text-muted-foreground">
+                    {t("No such chat", "没有这个对话")}
+                  </p>
+                ) : (
+                  <div className="flex w-full max-w-2xl flex-col gap-4">
+                    <CardTitle className="text-center text-lg">
+                      {t("New chat", "新对话")}
+                    </CardTitle>
+                    <ChatComposer
+                      id={null}
+                      busy={false}
+                      examples={[
+                        t(
+                          "google_search is disabled. Can it be fixed?",
+                          "google_search 停用了，看看能不能修好"
+                        ),
+                        t(
+                          "Add a source for the front page of lobste.rs",
+                          "加一个 lobste.rs 首页最热的源"
+                        ),
+                        t(
+                          "Can freebuf be crawled again?",
+                          "freebuf 还能抓吗？"
+                        ),
+                      ]}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -172,8 +174,21 @@ async function ChatList({
     <Card size="sm" className={className}>
       <CardHeader>
         <CardTitle>{t("Chats", "对话")}</CardTitle>
+        {current && (
+          <CardAction>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href="/agent" />}
+            >
+              <RiAddLine data-icon="inline-start" />
+              {t("New chat", "新对话")}
+            </Button>
+          </CardAction>
+        )}
       </CardHeader>
-      <CardContent className="flex flex-col gap-1 px-2">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2">
         {chats.map((c) => (
           <Link
             key={c.id}
@@ -200,7 +215,13 @@ async function ChatList({
   )
 }
 
-async function Thread({ chat: c }: { chat: Chat }) {
+async function Thread({
+  chat: c,
+  className,
+}: {
+  chat: Chat
+  className?: string
+}) {
   const t = await getT()
   const busy = isThinking(c)
   const p = c.proposal
@@ -213,7 +234,7 @@ async function Thread({ chat: c }: { chat: Chat }) {
   }
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <Link
           href="/agent"
@@ -237,102 +258,108 @@ async function Thread({ chat: c }: { chat: Chat }) {
             .join(" · ")}
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4 text-sm">
-        {groups.map((g, i) =>
-          Array.isArray(g) ? (
-            <details
-              key={i}
-              open={busy && i === groups.length - 1}
-              className="text-xs text-muted-foreground"
-            >
-              <summary className="cursor-pointer">
-                {t(`Steps · ${g.length}`, `过程 · ${g.length} 步`)}
-              </summary>
-              <ol className="mt-2 flex flex-col gap-1">
-                {g.map((s, j) => (
-                  <li key={j} className="flex gap-2">
-                    <span className="shrink-0 font-mono">{s.tool}</span>
-                    <span className="break-all">{s.note}</span>
-                  </li>
-                ))}
-              </ol>
-            </details>
-          ) : (
-            <Message key={i} event={g} source={p?.new ? null : p?.key} />
-          )
-        )}
-        {busy && (
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Spinner aria-hidden />
-            {t("Working on it", "正在处理")}
-            {c.events.at(-1)?.kind === "step" &&
-              t(`: ${c.events.at(-1)?.note}`, `：${c.events.at(-1)?.note}`)}
-          </p>
-        )}
-        {!busy && c.state === "thinking" && (
-          <p className="flex items-start gap-2 text-destructive">
-            <RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
-            {t(
-              "The reply was interrupted (the spider container may have restarted). Send the message again.",
-              "回复中断了（可能是爬虫容器重启了），再发一次就行。"
-            )}
-          </p>
-        )}
-        {p && (
-          <div className="flex flex-col gap-3 border-t pt-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono font-medium">sources/{p.key}/</span>
-              {p.new && (
-                <Badge variant="secondary">{t("New source", "新源")}</Badge>
-              )}
-              <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                {t.time(p.ts)}
-              </span>
-            </div>
-            {p.note && <p className="leading-relaxed">{p.note}</p>}
-            {p.checks && <Checks checks={p.checks} />}
-            {p.dry_run && <DryRun run={p.dry_run} />}
-            {p.diff && <PatchDiff diff={p.diff} open={!p.task} />}
-            {p.task ? (
-              <p className="flex items-start gap-2 rounded-in-card bg-emerald-500/10 px-3 py-2">
-                <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
-                <span>
-                  {t(
-                    `Applied by ${p.applied_by} ${t.time(p.applied_at ?? p.ts)} · AI repair task `,
-                    `${p.applied_by} ${t.time(p.applied_at ?? p.ts)} 应用 · AI 修复任务 `
-                  )}
-                  <Link
-                    href={p.new ? "/repairs" : `/sources/${p.key}`}
-                    className="font-medium hover:underline"
-                  >
-                    #{p.task}
-                  </Link>
-                </span>
-              </p>
+      {/* column-reverse: a long thread opens at its newest message; mb-auto keeps a short one at the top */}
+      <CardContent className="flex min-h-0 flex-1 flex-col-reverse overflow-y-auto text-sm">
+        <div className="mb-auto flex flex-col gap-4">
+          {groups.map((g, i) =>
+            Array.isArray(g) ? (
+              <details
+                key={i}
+                open={busy && i === groups.length - 1}
+                className="text-xs text-muted-foreground"
+              >
+                <summary className="cursor-pointer">
+                  {t(`Steps · ${g.length}`, `过程 · ${g.length} 步`)}
+                </summary>
+                <ol className="mt-2 flex flex-col gap-1">
+                  {g.map((s, j) => (
+                    <li key={j} className="flex gap-2">
+                      <span className="shrink-0 font-mono">{s.tool}</span>
+                      <span className="break-all">{s.note}</span>
+                    </li>
+                  ))}
+                </ol>
+              </details>
             ) : (
-              <RepairButtons
-                id={c.id}
-                source={p.key}
-                ops={[
-                  {
-                    op: "apply-chat",
-                    label: t("Apply", "应用改动"),
-                    variant: "default",
-                    confirm: {
-                      title: t("Apply this change?", "应用这个改动？"),
-                      text: t(
-                        `It goes into sources/${p.key}/ and the source runs once with the new code right away; if that works it writes to the source table, like the hourly round. It's recorded as an AI repair task, so you can revert it from the source's page.`,
-                        `改动会写进 sources/${p.key}/，并立即用新代码跑一次：成功就写进源表，和整点那轮一样。它会记成一个 AI 修复任务，之后可以在源的页面撤销。`
-                      ),
+              <Message key={i} event={g} source={p?.new ? null : p?.key} />
+            )
+          )}
+          {busy && (
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <Spinner aria-hidden />
+              {t("Working on it", "正在处理")}
+              {c.events.at(-1)?.kind === "step" &&
+                t(`: ${c.events.at(-1)?.note}`, `：${c.events.at(-1)?.note}`)}
+            </p>
+          )}
+          {!busy && c.state === "thinking" && (
+            <p className="flex items-start gap-2 text-destructive">
+              <RiErrorWarningLine className="mt-0.5 size-4 shrink-0" />
+              {t(
+                "The reply was interrupted (the spider container may have restarted). Send the message again.",
+                "回复中断了（可能是爬虫容器重启了），再发一次就行。"
+              )}
+            </p>
+          )}
+          {p && (
+            <div className="flex flex-col gap-3 border-t pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono font-medium">sources/{p.key}/</span>
+                {p.new && (
+                  <Badge variant="secondary">{t("New source", "新源")}</Badge>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                  {t.time(p.ts)}
+                </span>
+              </div>
+              {p.note && <p className="leading-relaxed">{p.note}</p>}
+              {p.checks && <Checks checks={p.checks} />}
+              {p.dry_run && <DryRun run={p.dry_run} />}
+              {/* closed: the thread opens at its end, where an open diff would hide the reply */}
+              {p.diff && <PatchDiff diff={p.diff} />}
+              {p.task ? (
+                <p className="flex items-start gap-2 rounded-in-card bg-emerald-500/10 px-3 py-2">
+                  <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  <span>
+                    {t(
+                      `Applied by ${p.applied_by} ${t.time(p.applied_at ?? p.ts)} · AI repair task `,
+                      `${p.applied_by} ${t.time(p.applied_at ?? p.ts)} 应用 · AI 修复任务 `
+                    )}
+                    <Link
+                      href={p.new ? "/repairs" : `/sources/${p.key}`}
+                      className="font-medium hover:underline"
+                    >
+                      #{p.task}
+                    </Link>
+                  </span>
+                </p>
+              ) : (
+                <RepairButtons
+                  id={c.id}
+                  source={p.key}
+                  ops={[
+                    {
+                      op: "apply-chat",
+                      label: t("Apply", "应用改动"),
+                      variant: "default",
+                      confirm: {
+                        title: t("Apply this change?", "应用这个改动？"),
+                        text: t(
+                          `It goes into sources/${p.key}/ and the source runs once with the new code right away; if that works it writes to the source table, like the hourly round. It's recorded as an AI repair task, so you can revert it from the source's page.`,
+                          `改动会写进 sources/${p.key}/，并立即用新代码跑一次：成功就写进源表，和整点那轮一样。它会记成一个 AI 修复任务，之后可以在源的页面撤销。`
+                        ),
+                      },
                     },
-                  },
-                ]}
-              />
-            )}
-          </div>
-        )}
-        <ChatComposer id={c.id} busy={busy} />
+                  ]}
+                />
+              )}
+            </div>
+          )}
+        </div>
       </CardContent>
+      <CardFooter className="flex-col items-stretch border-t">
+        <ChatComposer id={c.id} busy={busy} />
+      </CardFooter>
     </Card>
   )
 }
