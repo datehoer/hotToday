@@ -99,7 +99,7 @@ export default async function Sources({
               name="q"
               defaultValue={q}
               placeholder={t("Search by name or table", "搜索名称或表名")}
-              className="h-9 w-full rounded-full border border-transparent bg-input/50 pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="h-9 w-full rounded-3xl border border-transparent bg-input/50 pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
             />
           </form>
         </div>

@@ -166,14 +166,14 @@ export function PillNav({
   }[]
 }) {
   return (
-    <nav className="inline-flex h-9 w-fit items-center rounded-full bg-muted p-1 text-sm">
+    <nav className="inline-flex h-9 w-fit items-center rounded-3xl bg-muted p-1 text-sm">
       {items.map((it) => (
         <Link
           key={it.label}
           href={it.href}
           scroll={false}
           data-active={it.active || undefined}
-          className="inline-flex h-full items-center gap-1.5 rounded-full px-3 font-medium text-foreground/60 transition-colors hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm"
+          className="inline-flex h-full items-center gap-1.5 rounded-lg px-3 font-medium text-foreground/60 transition-colors hover:text-foreground data-active:bg-background data-active:text-foreground data-active:shadow-sm"
         >
           {it.label}
           {it.count != null && (

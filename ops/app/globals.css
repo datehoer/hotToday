@@ -74,7 +74,7 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.875rem;
+  --radius: 0.25rem;
   --sidebar: oklch(0.985 0.001 106.423);
   --sidebar-foreground: oklch(0.147 0.004 49.25);
   --sidebar-primary: oklch(0.546 0.245 262.881);
@@ -134,9 +134,12 @@
 }
 
 /* A surface inside a card (code, a note, a message): its corners follow the card's, so its radius is the
-   card's less the card's padding (12.4px in a card, 20.4px in a small one). */
+   card's less the card's padding, but never below radius-lg (with the current small scale, always 4px). */
 @utility rounded-in-card {
-  border-radius: calc(--theme(--radius-4xl) - var(--card-spacing, 1.5rem));
+  border-radius: max(
+    --theme(--radius-lg),
+    calc(--theme(--radius-4xl) - var(--card-spacing, 1.5rem))
+  );
 }
 
 /* The bar under the header while a page loads (PageSkeleton). */
