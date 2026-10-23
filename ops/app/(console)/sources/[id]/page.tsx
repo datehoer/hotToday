@@ -23,6 +23,7 @@ import {
   PageTitle,
   RepairBadge,
   RepairTimeline,
+  SourceStatus,
   STATUS,
   Stat,
   StatusBadge,
@@ -48,6 +49,7 @@ import { count } from "@/lib/i18n"
 import {
   cause,
   CAUSE,
+  failing,
   getRepairs,
   getRunsAfter,
   getSource,
@@ -56,8 +58,8 @@ import {
   getSourceRuns,
   getT,
   isLow,
+  OPEN_REPAIR,
   type Repair,
-  type RepairState,
   type Run,
 } from "@/lib/ops"
 import { cn, daysSince, fmtHour, fmtNum, listSize } from "@/lib/utils"
@@ -113,11 +115,10 @@ export default async function SourceDetail({ params, searchParams }: Props) {
     : null
   const lastOkRun = runs.find((r) => r.status === "ok")
   const host = items.map((i) => URL.parse(i.url ?? "")?.host).find(Boolean)
+  // An approved patch that ran after this round and still wrote nothing (when it wrote, the source isn't failing)
+  const verify = s.repair?.state === "observing" ? s.repair.verify : null
+  const verifiedLater = verify && verify.ts > s.run.finished_at ? verify : null
   // Consecutive rounds that wrote nothing, counting back from this one.
-  // A run right after approving a patch is newer than this round; the board catches up next round.
-  const verified = repairs[0]?.verify
-  const verifiedLater =
-    verified && verified.ts > s.run.finished_at ? verified : null
   const streak =
     s.history.length - 1 - s.history.findLastIndex((h) => !failed(h))
 
@@ -136,7 +137,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           title={
             <>
               {s.name}
-              <StatusBadge run={s.run} low={s.low} />
+              <SourceStatus source={s} />
             </>
           }
           aside={
@@ -167,7 +168,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           </span>
         </PageTitle>
 
-        {failed(s.run) && (
+        {failing(s) && (
           <Alert className="border-destructive/15 bg-destructive/5 text-destructive">
             {s.run.status === "empty" ? (
               <RiInbox2Line />
@@ -220,8 +221,8 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                 <>
                   <br />
                   {t(
-                    `After the patch was approved at ${t.time(verifiedLater.ts)}, the new code ran once: ${verifiedLater.status === "ok" ? `${count(verifiedLater.items ?? 0, "item")}, written.` : "still nothing written."} The status here updates with the next round.`,
-                    `${t.time(verifiedLater.ts)} 批准补丁后用新代码跑过一次：${verifiedLater.status === "ok" ? `${verifiedLater.items} 条，已写入。` : "还是没写入。"}这里的状态下一轮才更新。`
+                    `After the patch was approved at ${t.time(verifiedLater.ts)}, the new code ran once and still wrote nothing. The status here updates with the next round.`,
+                    `${t.time(verifiedLater.ts)} 批准补丁后用新代码跑过一次，还是没写入。这里的状态下一轮才更新。`
                   )}
                 </>
               )}
@@ -259,12 +260,12 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           </Alert>
         )}
 
-        {(repairs.length > 0 || failed(s.run) || s.low) && (
+        {(repairs.length > 0 || failing(s) || s.low) && (
           <RepairCard
             source={s.id}
             repairs={repairs}
             after={after}
-            broken={failed(s.run) || s.low}
+            broken={failing(s) || s.low}
           />
         )}
 
@@ -516,8 +517,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
   )
 }
 
-const OPEN: RepairState[] = ["analyzing", "awaiting_review", "observing"]
-
 /** The latest AI repair task for this source: diagnosis, checks, the sandbox run, the diff and what to
  * do next. Diagnosis, notes and checks are written by repair.py and the model, in Chinese. */
 async function RepairCard({
@@ -576,7 +575,7 @@ async function RepairCard({
         ),
       },
     })
-  if (broken && !(r && OPEN.includes(r.state)))
+  if (broken && !(r && OPEN_REPAIR.includes(r.state)))
     ops.push({
       op: "run",
       label: r

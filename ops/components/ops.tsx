@@ -23,7 +23,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { count, type Translate } from "@/lib/i18n"
 import {
+  fixed,
   getT,
+  OPEN_REPAIR,
   phase,
   PHASE,
   REPAIR_STATE,
@@ -31,6 +33,7 @@ import {
   type RepairState,
   type Round,
   type Run,
+  type Source,
   type Status,
 } from "@/lib/ops"
 import { cn, fmtNum } from "@/lib/utils"
@@ -61,6 +64,36 @@ export async function StatusBadge({
   if (run.status === "disabled")
     return <Badge variant="secondary">{t(...STATUS.disabled)}</Badge>
   return <Badge variant="destructive">{t(...STATUS[run.status])}</Badge>
+}
+
+/** A source's status in the list and on its page: the latest round's, or OK after approval when an approved
+ * patch wrote data since; an open AI repair task shows beside it. */
+export async function SourceStatus({ source: s }: { source: Source }) {
+  const t = await getT()
+  const v = fixed(s)
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {v ? (
+        <Badge
+          className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+          title={t(
+            `The run right after approval at ${t.time(v.ts)}; the hourly round hasn't run the new code yet`,
+            `${t.time(v.ts)} 批准后立即跑的那一次；整点那轮还没跑新代码`
+          )}
+        >
+          {t(
+            `OK after approval · ${count(v.items ?? 0, "item")}`,
+            `批准后正常 · ${v.items} 条`
+          )}
+        </Badge>
+      ) : (
+        <StatusBadge run={s.run} low={s.low} />
+      )}
+      {s.repair && !v && OPEN_REPAIR.includes(s.repair.state) && (
+        <RepairBadge state={s.repair.state} />
+      )}
+    </span>
+  )
 }
 
 export async function PhaseBadge({ round }: { round: Round }) {

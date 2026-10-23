@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/ops-client"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { requireUser } from "@/lib/auth"
-import { getBoard, getT, nextRound, phase, PHASE } from "@/lib/ops"
+import { failing, getBoard, getT, nextRound, phase, PHASE } from "@/lib/ops"
 
 // Everything in (console) needs a login; /login lives outside it.
 export default async function ConsoleLayout({
@@ -14,14 +14,11 @@ export default async function ConsoleLayout({
   const ok = running
     ? progress.filter((r) => r.status === "ok").length
     : sources.filter((s) => s.run.status === "ok").length
-  const failing = sources.filter(
-    (s) => s.run.status === "empty" || s.run.status === "error"
-  ).length
   return (
     <SidebarProvider>
       <AppSidebar
         user={user}
-        failing={failing}
+        failing={sources.filter(failing).length}
         round={
           round && {
             label: t(

@@ -46,6 +46,7 @@ export type Source = {
   usual: number | null // median items of the last 20 ok runs in history, given at least 5
   lastOk: number | null // epoch seconds of the last snapshot written
   low: boolean // ok, but far fewer items than usual
+  repair: Pick<Repair, "id" | "state" | "verify"> | null // the latest AI repair task, if open or applied since this round began
 }
 
 async function query<T>(sql: string, args: unknown[] = []) {
@@ -125,8 +126,26 @@ export const getBoard = cache(async () => {
       usual,
       lastOk: oks.at(-1)?.finished_at ?? null,
       low,
+      repair: null,
     }
   })
+  const repairs = latest
+    ? await queryRepairs(
+        "state = any($1) or applied_at > $2",
+        [OPEN_REPAIR, latest.started_at],
+        "id desc",
+        200
+      )
+    : []
+  for (const s of sources) {
+    const r = repairs.find((r) => r.source === s.id)
+    s.repair = r ? { id: r.id, state: r.state, verify: r.verify } : null
+    const v = fixed(s)
+    if (v) {
+      s.lastOk = Math.max(s.lastOk ?? 0, v.ts)
+      s.low = isLow({ ...s.run, status: "ok", items: v.items }, s.usual)
+    }
+  }
   await fillLastOk(
     sources.filter((s) => s.lastOk == null && s.run.status !== "disabled")
   )
@@ -305,6 +324,27 @@ export type Repair = {
   applied_at: number | null
 }
 
+export const OPEN_REPAIR: RepairState[] = [
+  "analyzing",
+  "awaiting_review",
+  "observing",
+]
+
+/** The run right after approving a patch, when it wrote data after the latest round ran the source: until the
+ * next round runs the new code, the source counts as fixed by it. */
+export function fixed(s: Source) {
+  const v = s.repair?.verify
+  return s.repair?.state === "observing" &&
+    v?.status === "ok" &&
+    v.ts > s.run.finished_at
+    ? v
+    : null
+}
+
+/** Wrote nothing in the latest round, and no approved patch has written since. */
+export const failing = (s: Source) =>
+  (s.run.status === "empty" || s.run.status === "error") && !fixed(s)
+
 // The PRD's wording for each state.
 export const REPAIR_STATE: Record<RepairState, [string, string]> = {
   analyzing: ["Analyzing", "分析中"],
@@ -355,8 +395,8 @@ export const getRepairs = (source: string) =>
 // Open tasks, plus the ones that moved in the last day (approved, recovered, …).
 export const getActiveRepairs = (since: number) =>
   queryRepairs(
-    "state in ('analyzing', 'awaiting_review', 'observing') or updated_at > $1",
-    [since],
+    "state = any($1) or updated_at > $2",
+    [OPEN_REPAIR, since],
     "updated_at desc"
   )
 

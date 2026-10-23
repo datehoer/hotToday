@@ -6,8 +6,8 @@ import {
   PageHeader,
   PageTitle,
   PillNav,
+  SourceStatus,
   Spark,
-  StatusBadge,
 } from "@/components/ops"
 import { Card } from "@/components/ui/card"
 import {
@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { count } from "@/lib/i18n"
-import { getBoard, getT, HISTORY, type Source } from "@/lib/ops"
+import { failing, fixed, getBoard, getT, HISTORY, type Source } from "@/lib/ops"
 import { cn, fmtNum } from "@/lib/utils"
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,11 +27,16 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("Sources", "源") }
 }
 
-const bad = (s: Source) => s.run.status === "empty" || s.run.status === "error"
 const FILTERS = {
   all: [["All", "全部"], () => true],
-  attention: [["Needs attention", "需要处理"], (s: Source) => bad(s) || s.low],
-  ok: [["OK", "正常"], (s: Source) => s.run.status === "ok" && !s.low],
+  attention: [
+    ["Needs attention", "需要处理"],
+    (s: Source) => failing(s) || s.low,
+  ],
+  ok: [
+    ["OK", "正常"],
+    (s: Source) => (s.run.status === "ok" || !!fixed(s)) && !s.low,
+  ],
   disabled: [
     ["Disabled", "已停用"],
     (s: Source) => s.run.status === "disabled",
@@ -39,7 +44,7 @@ const FILTERS = {
 } as const
 type Filter = keyof typeof FILTERS
 const rank = (s: Source) =>
-  bad(s) ? 0 : s.low ? 1 : s.run.status === "disabled" ? 3 : 2
+  failing(s) ? 0 : s.low ? 1 : s.run.status === "disabled" ? 3 : 2
 
 export default async function Sources({
   searchParams,
@@ -145,7 +150,7 @@ export default async function Sources({
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <StatusBadge run={s.run} low={s.low} />
+                    <SourceStatus source={s} />
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     {s.run.status !== "disabled" && (
@@ -164,7 +169,7 @@ export default async function Sources({
                   <TableCell
                     className={cn(
                       "pr-4 tabular-nums sm:pr-6",
-                      bad(s) ? "text-destructive" : "text-muted-foreground"
+                      failing(s) ? "text-destructive" : "text-muted-foreground"
                     )}
                   >
                     {s.lastOk ? t.time(s.lastOk) : "—"}
