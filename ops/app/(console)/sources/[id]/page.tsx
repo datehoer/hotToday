@@ -33,6 +33,7 @@ import {
 } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Card,
   CardAction,
@@ -533,7 +534,7 @@ async function RepairCard({
 
   return (
     <Card>
-      {r?.state === "analyzing" && <AutoRefresh seconds={10} />}
+      {r?.state === "analyzing" && <AutoRefresh seconds={4} />}
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {t("AI repair", "AI 修复")}
@@ -562,12 +563,17 @@ async function RepairCard({
       <CardContent className="flex flex-col gap-4 text-sm">
         {r && (
           <p className="leading-relaxed">
-            {r.state === "analyzing"
-              ? t(
+            {r.state === "analyzing" ? (
+              <>
+                <Spinner className="mr-2 inline align-[-3px]" />
+                {t(
                   `Analyzing: ${r.steps.at(-1)?.note ?? "test crawl"}`,
                   `正在分析：${r.steps.at(-1)?.note ?? "试抓中"}`
-                )
-              : (r.summary ?? r.log.at(-1)?.note)}
+                )}
+              </>
+            ) : (
+              (r.summary ?? r.log.at(-1)?.note)
+            )}
           </p>
         )}
         {r?.verify && <VerifyRun verify={r.verify} />}
@@ -590,7 +596,8 @@ async function RepairCard({
           <PatchDiff diff={r.diff} open={r.state === "awaiting_review"} />
         )}
         {!!r?.steps.length && (
-          <details>
+          // open while the model works, so each step shows up as it happens
+          <details open={r.state === "analyzing"}>
             <summary className="cursor-pointer text-muted-foreground">
               {t(`Steps (${r.steps.length})`, `过程（${r.steps.length} 步）`)}
             </summary>

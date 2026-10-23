@@ -5,7 +5,7 @@ import { promisify } from "node:util"
 import { refresh } from "next/cache"
 
 import { requireUser } from "@/lib/auth"
-import { done, failed, getT, type Reply } from "@/lib/ops"
+import { done, failed, getT, latestRepairId, type Reply } from "@/lib/ops"
 
 const run = promisify(execFile)
 const REPAIR = ["hottoday-spider", "python", "/app/repair.py"]
@@ -24,6 +24,7 @@ export async function repairAction(form: FormData): Promise<Reply> {
   const key = String(form.get("key") ?? "")
   try {
     if (op === "run" && /^[a-z0-9_]+$/.test(key)) {
+      const before = await latestRepairId(key)
       await run("/usr/bin/docker", [
         "exec",
         "-d",
@@ -33,7 +34,20 @@ export async function repairAction(form: FormData): Promise<Reply> {
         "--by",
         user,
       ])
+      // repair.py takes a second or two to open the task, and the page only follows a task it can see
+      let started = false
+      for (let i = 0; i < 20 && !started; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        started = (await latestRepairId(key)) > before
+      }
       refresh()
+      if (!started)
+        return failed(
+          t(
+            "It didn't start: this source may already have an open task.",
+            "没有开始：这个源可能已经有进行中的任务"
+          )
+        )
       return done(
         t(
           "The analysis has started. Results come within a few minutes, and the page refreshes by itself.",

@@ -392,6 +392,19 @@ const queryRepairs = (
 export const getRepairs = (source: string) =>
   queryRepairs("source = $1", [source])
 
+// The newest task id of a source, 0 for none: starting an analysis opens one with a higher id.
+export const latestRepairId = (source: string) =>
+  ifRepairs(
+    async () =>
+      (
+        await query<{ id: number }>(
+          "select coalesce(max(id), 0)::int as id from ops.repair where source = $1",
+          [source]
+        )
+      )[0].id,
+    0
+  )
+
 // Open tasks, plus the ones that moved in the last day (approved, recovered, …).
 export const getActiveRepairs = (since: number) =>
   queryRepairs(
