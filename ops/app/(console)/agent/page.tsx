@@ -174,19 +174,18 @@ async function ChatList({
     <Card size="sm" className={className}>
       <CardHeader>
         <CardTitle>{t("Chats", "对话")}</CardTitle>
-        {current && (
-          <CardAction>
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link href="/agent" />}
-            >
-              <RiAddLine data-icon="inline-start" />
-              {t("New chat", "新对话")}
-            </Button>
-          </CardAction>
-        )}
+        {/* in every view, so the header and the list don't move when a chat opens */}
+        <CardAction>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/agent" />}
+          >
+            <RiAddLine data-icon="inline-start" />
+            {t("New chat", "新对话")}
+          </Button>
+        </CardAction>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2">
         {chats.map((c) => (
@@ -243,8 +242,11 @@ async function Thread({
           <RiArrowLeftSLine className="size-4" />
           {t("All chats", "全部对话")}
         </Link>
-        <CardTitle className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 [overflow-wrap:anywhere]">{c.title}</span>
+        {/* one line, so switching chats doesn't resize the thread; the title is the first message */}
+        <CardTitle className="flex min-w-0 items-center gap-2">
+          <span title={c.title} className="min-w-0 truncate">
+            {c.title}
+          </span>
           <ChatBadge chat={c} />
         </CardTitle>
         <CardDescription className="tabular-nums">
