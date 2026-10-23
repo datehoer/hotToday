@@ -86,14 +86,10 @@ export default async function Repairs({
       )}
       <div className="flex flex-col gap-5 p-4 md:p-6">
         <PageTitle title={t("AI repair", "AI 修复")}>
-          {t(
-            "Every repair task, most recently changed first: who started it, the diagnosis, the run with the new code after approval, and the two rounds after the patch went live. ",
-            "每个修复任务的经过，最近有变化的在前：谁开的、诊断、批准后用新代码跑的那一次，和补丁上线后的两轮。"
-          )}
           {count(["awaiting_review"]) > 0 &&
             t(
-              `${count(["awaiting_review"])} awaiting review.`,
-              `${count(["awaiting_review"])} 个待 review。`
+              `${count(["awaiting_review"])} awaiting review`,
+              `${count(["awaiting_review"])} 个待 review`
             )}
         </PageTitle>
         <PillNav

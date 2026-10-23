@@ -32,7 +32,6 @@ import {
   getSubpoolConf,
   getT,
   statsName,
-  SUBPOOL_CONF,
   SUBPOOL_FIELDS,
   SUBPOOL_STRATEGIES,
   type SourceConfig,
@@ -88,12 +87,7 @@ export default async function Config({
     <>
       <PageHeader crumbs={[[t("Ops", "运维"), "/"], [t("Config", "配置")]]} />
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title={t("Config", "配置")}>
-          {t(
-            "Source settings live in sources/ in the hotToday repo and are read-only here. AI repair settings are stored in PostgreSQL and the proxy pool's in subpool.conf; both can be changed here.",
-            "源的设置在 hotToday 仓库的 sources/ 里，这里只读；AI 修复的设置存在 PostgreSQL，代理池的设置在 subpool.conf，都能在这里改。"
-          )}
-        </PageTitle>
+        <PageTitle title={t("Config", "配置")} />
         <PillNav
           items={(Object.keys(TABS) as Tab[]).map((key) => ({
             href: key === "sources" ? "/config" : `/config?tab=${key}`,
@@ -132,34 +126,12 @@ function Sources({ t, config }: { t: Translate; config: SpiderConfig }) {
   const rows = sources.toSorted(
     (a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key)
   )
-  const on = sources.filter((s) => s.enabled).length
-  const off = sources.filter((s) => s.enabled === false).length
-  const broken = sources.filter((s) => s.error).length
-  const types = [
-    ...Map.groupBy(
-      sources.filter((s) => s.type),
-      (s) => s.type!
-    ),
-  ]
 
   return (
     <>
-      <p className="text-sm text-muted-foreground">
-        {t(
-          `${count(sources.length, "source")}: ${on} enabled, ${off} disabled${broken ? `, ${broken} with a broken source.yaml` : ""}. Fetched by ${types.map(([type, list]) => `${type} (${list.length})`).join(", ")}; run records are kept for ${count(config.keep_days, "day")}. Click a source to see its files.`,
-          `${sources.length} 个源：${on} 个启用，${off} 个停用${broken ? `，${broken} 个 source.yaml 有错` : ""}。抓取方式 ${types.map(([type, list]) => `${type} ${list.length} 个`).join("、")}；运行记录保留 ${config.keep_days} 天。点源名看它的文件。`
-        )}
-      </p>
-
       <Card>
         <CardHeader>
           <CardTitle>{t("Proxies", "代理")}</CardTitle>
-          <CardDescription>
-            {t(
-              "PROXIES in hotToday's config.py; the proxy field of a source.yaml takes one of these names. Credentials are hidden.",
-              "hotToday config.py 里的 PROXIES，source.yaml 的 proxy 字段填这里的名字；账号密码已隐藏"
-            )}
-          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
           {Object.entries(proxies).map(([name, url]) => {
@@ -316,12 +288,6 @@ function Repair({
               "接口、模型、限额和提示词"
             )}
           </CardTitle>
-          <CardDescription>
-            {t(
-              "Stored in ops.setting in PostgreSQL, except the key, which is in hotToday/.env. After saving, the next round and every task opened after it use the new settings.",
-              "存在 PostgreSQL 的 ops.setting（密钥除外，它在 hotToday/.env），保存后下一轮和之后开的任务就按新设置。"
-            )}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <RepairSettingsForm settings={r} />
@@ -333,8 +299,8 @@ function Repair({
           <CardTitle>{t("Triage rules", "分流规则")}</CardTitle>
           <CardDescription>
             {t(
-              "Matched in order against the latest error; a match makes it an ops issue and the model isn't called. Sources behind a proxy or a browser go to a human; the rest (empty responses, parse errors, low counts) go to the model.",
-              "按顺序匹配最近一次的错误，命中就归为运维处理，不调模型。用代理或浏览器的源交给人；其余（返回空、解析出错、条数偏低）交给模型。"
+              "Matched in order; a match skips the model",
+              "按顺序匹配，命中就不调模型"
             )}
           </CardDescription>
         </CardHeader>
@@ -378,19 +344,13 @@ function Repair({
           <CardTitle>
             {t("Fixed in repair.py", "写在 repair.py 里的部分")}
           </CardTitle>
-          <CardDescription>
-            {t(
-              "Changing these means changing the code. The program builds the first user message: the source's details and last 8 rounds, the files in its folder, the data structure it last saved, and a sandbox fetch with the current code.",
-              "改这些要改代码。第一条用户消息由程序拼出：源的信息和最近 8 轮结果、源目录里的文件、最后一次成功存下的数据结构、用现在的代码在沙箱里试抓的结果"
-            )}
-          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
           <details>
             <summary className="cursor-pointer font-medium">
               {t("What {doc} in the prompt holds", "提示词里 {doc} 的内容")}
             </summary>
-            <pre className="mt-2 max-h-[560px] overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
+            <pre className="mt-2 max-h-[560px] overflow-auto rounded-in-card bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
               {r.doc}
             </pre>
           </details>
@@ -398,7 +358,7 @@ function Repair({
             <summary className="cursor-pointer font-medium">
               {t("The last-turn message", "最后一个回合")}
             </summary>
-            <pre className="mt-2 overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
+            <pre className="mt-2 overflow-auto rounded-in-card bg-muted/50 p-3 font-mono text-xs leading-5 whitespace-pre-wrap">
               {r.final}
             </pre>
           </details>
@@ -466,12 +426,6 @@ async function Subpool({ t }: { t: Translate }) {
       <Card>
         <CardHeader>
           <CardTitle>{t("Scheduling and checks", "调度和检测")}</CardTitle>
-          <CardDescription>
-            {t(
-              `Saving writes only these settings back to ${SUBPOOL_CONF}, then restarts subpool.service.`,
-              `保存时只改这几项，写回 ${SUBPOOL_CONF}，再重启 subpool.service。`
-            )}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <SubpoolForm
@@ -487,8 +441,8 @@ async function Subpool({ t }: { t: Translate }) {
           <CardDescription>
             {p
               ? t(
-                  `As loaded at ${t.time(Date.parse(p.subscribe.at) / 1000)}; "available" counts the nodes passing the health check right now.`,
-                  `${t.time(Date.parse(p.subscribe.at) / 1000)} 拉取的结果，可用数是现在通过健康检测的节点。`
+                  `Loaded at ${t.time(Date.parse(p.subscribe.at) / 1000)}`,
+                  `${t.time(Date.parse(p.subscribe.at) / 1000)} 拉取`
                 )
               : t(
                   `subpool isn't running, so there are no load results: ${"error" in proxy ? proxy.error : ""}.`,

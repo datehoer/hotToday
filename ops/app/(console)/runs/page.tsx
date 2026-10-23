@@ -12,7 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { count } from "@/lib/i18n"
 import { getBoard, getRounds, getT } from "@/lib/ops"
 import { cn, fmtNum, listSize } from "@/lib/utils"
 
@@ -35,10 +34,6 @@ export default async function Runs({
     getRounds(n + 1),
   ])
   const rounds = page.slice(0, n)
-  const took = rounds
-    .filter((r) => r.finished_at != null)
-    .map((r) => r.finished_at! - r.started_at)
-  const avg = took.length ? took.reduce((a, b) => a + b, 0) / took.length : null
 
   return (
     <>
@@ -48,17 +43,7 @@ export default async function Runs({
       />
       {running && <AutoRefresh seconds={15} />}
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title={t("Rounds", "运行")}>
-          {t(
-            "One round on the hour: crawl → clean → embed. ",
-            "每小时整点一轮：抓取 → 清洗 → 向量化。"
-          )}
-          {avg != null &&
-            t(
-              `The last ${count(took.length, "round")} took ${t.ms(avg * 1000)} on average.`,
-              `最近 ${took.length} 轮平均用时 ${t.ms(avg * 1000)}。`
-            )}
-        </PageTitle>
+        <PageTitle title={t("Rounds", "运行")} />
         <Card className="py-2">
           <Table>
             <TableHeader>

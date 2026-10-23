@@ -60,13 +60,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   ChartContainer,
   ChartLegend,
@@ -81,7 +75,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
@@ -114,7 +107,7 @@ import type {
   SUBPOOL_STRATEGIES,
   SubpoolKey,
 } from "@/lib/ops"
-import { count, T, type Lang } from "@/lib/i18n"
+import { T, type Lang } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 const LangContext = createContext<Lang>("en")
@@ -197,22 +190,16 @@ export function AppSidebar({
               size="lg"
               render={<Link href="/" onClick={() => setOpenMobile(false)} />}
             >
-              <span className="flex size-8 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">
+              <span className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <RiFireFill className="size-4.5" />
               </span>
-              <span className="grid leading-tight">
-                <span className="font-semibold">hotToday</span>
-                <span className="text-xs text-muted-foreground">
-                  {t("Crawler ops", "爬虫运维")}
-                </span>
-              </span>
+              <span className="font-semibold">hotToday</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{t("Navigation", "导航")}</SidebarGroupLabel>
           <SidebarMenu>
             {NAV.map(({ href, label, icon: Icon }) => (
               <SidebarMenuItem key={href}>
@@ -664,20 +651,12 @@ export function LoginForm({ next }: { next: string }) {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center gap-3 text-center">
-        <span className="mx-auto flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <RiFireFill className="size-5" />
         </span>
-        <div className="flex flex-col gap-1">
-          <CardTitle className="text-lg">
-            {t("hotToday crawler ops", "hotToday 爬虫运维")}
-          </CardTitle>
-          <CardDescription>
-            {t(
-              "Sign in to see how crawling and rounds are going",
-              "登录后查看抓取和运行情况"
-            )}
-          </CardDescription>
-        </div>
+        <CardTitle className="text-lg">
+          {t("hotToday crawler ops", "hotToday 爬虫运维")}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form action={action} className="flex flex-col gap-4">
@@ -887,15 +866,7 @@ export function ChatComposer({
           {error}
         </p>
       )}
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">
-          {busy
-            ? t("Wait for the reply before sending more", "等它回完再发下一条")
-            : t(
-                "Replies in the language you write in · Ctrl+Enter sends",
-                "用你写的语言回复 · Ctrl+Enter 发送"
-              )}
-        </span>
+      <div className="flex justify-end">
         <Button
           type="submit"
           disabled={!text.trim() || pending || busy}
@@ -1101,11 +1072,7 @@ const LIMIT_NAMES: Record<RepairLimit, string> = {
   dry_run_seconds: "Max seconds per sandbox crawl",
 }
 const LIMIT_HINTS: Partial<Record<RepairLimit, [string, string]>> = {
-  daily: [
-    "tasks that call the model, counted over 24 hours, manual ones too; 0 turns automatic analysis off",
-    "调模型的任务，24 小时内算，手动的也算；填 0 不自动分析",
-  ],
-  dry_run_seconds: ["each test crawl", "每次试抓"],
+  daily: ["0 turns automatic analysis off", "填 0 不自动分析"],
 }
 
 /** AI repair settings, saved to ops.setting by repair.py inside the spider container. Sent by hand,
@@ -1146,8 +1113,8 @@ export function RepairSettingsForm({
           id="api_base"
           label={t("API URL", "接口地址")}
           hint={t(
-            `OpenAI-compatible: /chat/completions calls the model, /models lists them; default ${r.defaults.api_base}`,
-            `OpenAI 兼容接口：调模型用 /chat/completions，列模型用 /models；默认 ${r.defaults.api_base}`
+            `OpenAI-compatible; default ${r.defaults.api_base}`,
+            `OpenAI 兼容接口；默认 ${r.defaults.api_base}`
           )}
           className="sm:col-span-2"
         >
@@ -1167,8 +1134,8 @@ export function RepairSettingsForm({
           hint={
             r.key
               ? t(
-                  `Using ${r.key} from hotToday/.env${r.key === "HOT_EMBED_KEY" ? " (shared with embedding)" : ""}. Leave empty to keep it; a key typed here goes into .env as HOT_REPAIR_KEY, never into the database`,
-                  `现在用 hotToday/.env 里的 ${r.key}${r.key === "HOT_EMBED_KEY" ? "（和向量化共用）" : ""}；留空不改，填了就写进 .env 的 HOT_REPAIR_KEY，不进数据库`
+                  `${r.key} from .env${r.key === "HOT_EMBED_KEY" ? " (shared with embedding)" : ""}; a new key goes into .env as HOT_REPAIR_KEY, never into the database`,
+                  `.env 里的 ${r.key}${r.key === "HOT_EMBED_KEY" ? "（和向量化共用）" : ""}；新密钥写进 .env 的 HOT_REPAIR_KEY，不进数据库`
                 )
               : t(
                   "No key in .env, so the model can't be called; a key typed here goes into .env as HOT_REPAIR_KEY",
@@ -1197,10 +1164,7 @@ export function RepairSettingsForm({
           label={t("Model", "模型")}
           hint={
             r.models.length
-              ? t(
-                  `${count(r.models.length, "model")} from the API's /models; after changing the URL or key, save to list theirs. Default ${r.defaults.model}. Test tries the selected model with the URL and key above, saved or not.`,
-                  `接口的 /models 列出 ${r.models.length} 个；换了接口地址或密钥，保存后这里按新的接口刷新。默认 ${r.defaults.model}。「测试」用上面的地址和密钥试选中的模型，不用先保存。`
-                )
+              ? t(`Default ${r.defaults.model}`, `默认 ${r.defaults.model}`)
               : t(
                   `Couldn't list the models (${r.models_error ?? "the list is empty"}); type a name. Default ${r.defaults.model}`,
                   `读不到模型列表（${r.models_error ?? "列表是空的"}），先手填；默认 ${r.defaults.model}`

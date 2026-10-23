@@ -11,12 +11,7 @@ import {
   RoundStats,
   StatusBadge,
 } from "@/components/ops"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -78,27 +73,17 @@ export default async function RoundDetail({ params }: Props) {
             </>
           }
         >
-          {end != null
-            ? t(
-                `Started ${t.time(start)}, finished ${t.time(end)}, took ${t.ms((end - start) * 1000)}.`,
-                `${t.time(start)} 开始，${t.time(end)} 结束，用时 ${t.ms((end - start) * 1000)}。`
-              )
-            : t(
-                `Started ${t.time(start)}; ${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} sources done.`,
-                `${t.time(start)} 开始，${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} 个源跑完。`
-              )}
+          {end == null &&
+            t(
+              `${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} sources done`,
+              `${runs.filter((r) => r.status !== "disabled").length} / ${round.sources} 个源跑完`
+            )}
         </PageTitle>
         <RoundStats round={round} runs={runs} />
         <RoundParts round={round} runs={runs} />
         <Card className="py-2">
           <CardHeader className="pt-4">
             <CardTitle>{t("Per source", "各源结果")}</CardTitle>
-            <CardDescription>
-              {t(
-                "Sources that wrote nothing first, the rest in the order they finished",
-                "没写入的排在前面，其余按跑完的先后"
-              )}
-            </CardDescription>
           </CardHeader>
           <Table>
             <TableHeader>

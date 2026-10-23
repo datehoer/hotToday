@@ -18,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { count } from "@/lib/i18n"
 import { failing, fixed, getBoard, getT, HISTORY, type Source } from "@/lib/ops"
 import { cn, fmtNum } from "@/lib/utils"
 
@@ -70,7 +69,6 @@ export default async function Sources({
         (a.lastOk ?? 0) - (b.lastOk ?? 0) ||
         a.run.finished_at - b.run.finished_at
     )
-  const enabled = sources.filter((s) => s.run.status !== "disabled").length
 
   return (
     <>
@@ -79,12 +77,7 @@ export default async function Sources({
         updated={latest?.finished_at}
       />
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title={t("Sources", "源")}>
-          {t(
-            `${count(sources.length, "source")}: ${enabled} crawled every hour, ${sources.length - enabled} disabled`,
-            `${sources.length} 个源：${enabled} 个每小时抓一次，${sources.length - enabled} 个已停用`
-          )}
-        </PageTitle>
+        <PageTitle title={t("Sources", "源")} />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <PillNav
             items={(Object.keys(FILTERS) as Filter[]).map((key) => ({

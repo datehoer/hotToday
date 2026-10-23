@@ -82,12 +82,7 @@ export default async function Agent({
               </Button>
             )
           }
-        >
-          {t(
-            "Work on sources with the site's AI: why one fails, a fix, a new source. A change is tried in the sandbox first and only goes into sources/ when you apply it.",
-            "和网站的 AI 一起查源、修源、加新源。改动先在沙箱里试抓，你点「应用」才写进 sources/。"
-          )}
-        </PageTitle>
+        />
         <div className="grid items-start gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <ChatList
             chats={chats}
@@ -106,12 +101,6 @@ export default async function Agent({
             <Card>
               <CardHeader>
                 <CardTitle>{t("New chat", "新对话")}</CardTitle>
-                <CardDescription>
-                  {t(
-                    "It can open any source (a disabled one, or a key that doesn't exist yet), read its files and recent rounds, fetch and render pages, and test a change in the sandbox. A change may also turn a disabled source back on, switch its proxy between none and subpool, or create a new source. Each message has the AI repair limits on turns and tokens; chats don't count toward the tasks per day.",
-                    "它能打开任何源（停用的、还不存在的新 key 都行），读文件和最近几轮的结果，抓取和渲染页面，在沙箱里试改动。改动还可以重新启用停用的源、在 none 和 subpool 之间换代理、新建源。每条消息按 AI 修复的回合和 token 上限算，不算进「每天最多几个任务」。"
-                  )}
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ChatComposer
@@ -183,12 +172,6 @@ async function ChatList({
     <Card size="sm" className={className}>
       <CardHeader>
         <CardTitle>{t("Chats", "对话")}</CardTitle>
-        <CardDescription>
-          {t(
-            "Newest first; every message is checked and tried in the sandbox",
-            "新的在前；每条消息都在沙箱里查和试抓"
-          )}
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-1 px-2">
         {chats.map((c) => (
@@ -243,12 +226,10 @@ async function Thread({ chat: c }: { chat: Chat }) {
           <span className="min-w-0 [overflow-wrap:anywhere]">{c.title}</span>
           <ChatBadge chat={c} />
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="tabular-nums">
           {[
-            t(
-              `started by ${c.created_by} ${t.time(c.created_at)}`,
-              `${c.created_by} ${t.time(c.created_at)} 开始`
-            ),
+            c.created_by,
+            t.time(c.created_at),
             c.model,
             `${fmtNum(c.tokens)} tokens`,
           ]
@@ -298,17 +279,14 @@ async function Thread({ chat: c }: { chat: Chat }) {
           </p>
         )}
         {p && (
-          <div className="flex flex-col gap-3 rounded-2xl border p-4">
+          <div className="flex flex-col gap-3 border-t pt-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">
-                {t("Change", "改动")} ·{" "}
-                <span className="font-mono">sources/{p.key}/</span>
-              </span>
+              <span className="font-mono font-medium">sources/{p.key}/</span>
               {p.new && (
                 <Badge variant="secondary">{t("New source", "新源")}</Badge>
               )}
               <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                {t(`proposed ${t.time(p.ts)}`, `${t.time(p.ts)} 提交`)}
+                {t.time(p.ts)}
               </span>
             </div>
             {p.note && <p className="leading-relaxed">{p.note}</p>}
@@ -316,12 +294,12 @@ async function Thread({ chat: c }: { chat: Chat }) {
             {p.dry_run && <DryRun run={p.dry_run} />}
             {p.diff && <PatchDiff diff={p.diff} open={!p.task} />}
             {p.task ? (
-              <p className="flex items-start gap-2 rounded-xl bg-emerald-500/10 px-3 py-2">
+              <p className="flex items-start gap-2 rounded-in-card bg-emerald-500/10 px-3 py-2">
                 <RiCheckLine className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                 <span>
                   {t(
-                    `Applied by ${p.applied_by} ${t.time(p.applied_at ?? p.ts)}, as AI repair task `,
-                    `${p.applied_by} ${t.time(p.applied_at ?? p.ts)} 应用，记成 AI 修复任务 `
+                    `Applied by ${p.applied_by} ${t.time(p.applied_at ?? p.ts)} · AI repair task `,
+                    `${p.applied_by} ${t.time(p.applied_at ?? p.ts)} 应用 · AI 修复任务 `
                   )}
                   <Link
                     href={p.new ? "/repairs" : `/sources/${p.key}`}
@@ -329,10 +307,6 @@ async function Thread({ chat: c }: { chat: Chat }) {
                   >
                     #{p.task}
                   </Link>
-                  {t(
-                    ". The next two rounds decide whether it worked; it can be reverted from the source's page.",
-                    "。之后两轮定结果，可以在源的页面撤销。"
-                  )}
                 </span>
               </p>
             ) : (
@@ -376,21 +350,19 @@ async function Message({
     return (
       <p
         title={`${e.by} · ${t.time(e.ts)}`}
-        className="ml-auto max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
+        className="ml-auto max-w-[85%] rounded-in-card bg-muted px-3.5 py-2 leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
       >
         {e.text}
       </p>
     )
   if (e.kind === "reply")
     return (
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground tabular-nums">
-          AI · {t.time(e.ts)}
-        </span>
-        <p className="leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap">
-          {e.text}
-        </p>
-      </div>
+      <p
+        title={t.time(e.ts)}
+        className="leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap"
+      >
+        {e.text}
+      </p>
     )
   if (e.kind === "applied")
     return (

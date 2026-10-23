@@ -12,13 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -296,17 +290,14 @@ export function PageSkeleton() {
       </header>
       <LoadingBar />
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-4 w-80 max-w-full" />
-        </div>
+        <Skeleton className="h-8 w-40" />
         <div className="grid grid-cols-2 gap-3 md:gap-4 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-28" />
+            <Skeleton key={i} className="h-28 rounded-4xl" />
           ))}
         </div>
-        <Skeleton className="h-72" />
-        <Skeleton className="h-44" />
+        <Skeleton className="h-72 rounded-4xl" />
+        <Skeleton className="h-44 rounded-4xl" />
       </div>
     </>
   )
@@ -446,7 +437,7 @@ export function BarList({
         <li key={r.key}>
           <Link
             href={r.href}
-            className="-mx-2 grid h-8 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 hover:bg-muted"
+            className="-mx-2 grid h-8 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-2 hover:bg-muted"
           >
             <span className="truncate">{r.label}</span>
             <i
@@ -526,10 +517,6 @@ export async function RoundStats({
         value={fmtNum(round.new_titles)}
         unit={t("", "条")}
         href={at}
-        note={t(
-          `cleaning took ${t.ms(round.etl_ms)}`,
-          `清洗用时 ${t.ms(round.etl_ms)}`
-        )}
       />
       <Stat
         label={t("Embedded", "向量化")}
@@ -537,8 +524,8 @@ export async function RoundStats({
         unit={t("", "条")}
         href={at}
         note={t(
-          `${fmtNum(round.embed_failed)} failed · took ${t.ms(round.embed_ms)}`,
-          `失败 ${fmtNum(round.embed_failed)} · 用时 ${t.ms(round.embed_ms)}`
+          `${fmtNum(round.embed_failed)} failed`,
+          `失败 ${fmtNum(round.embed_failed)}`
         )}
       />
     </div>
@@ -561,6 +548,9 @@ export async function RoundParts({
   const t = await getT()
   const n = tally(runs)
   const to = (href: string) => (linked ? href : undefined)
+  const total = STAGES.every((s) => round[s.key] != null)
+    ? STAGES.reduce((sum, s) => sum + round[s.key]!, 0)
+    : null
   return (
     <div className={cn("grid gap-4", !stack && "lg:grid-cols-2")}>
       <Card size="sm">
@@ -568,9 +558,6 @@ export async function RoundParts({
           <CardTitle>
             {t(count(runs.length, "source"), `${runs.length} 个源`)}
           </CardTitle>
-          <CardDescription>
-            {t("Status in this round", "这一轮的状态")}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Segments
@@ -605,16 +592,17 @@ export async function RoundParts({
       </Card>
       <Card size="sm">
         <CardHeader>
-          <CardTitle>{t("Steps in this round", "这一轮各阶段")}</CardTitle>
-          <CardDescription>
-            {round.error ? (
-              <span className="text-destructive">{round.error}</span>
-            ) : (
-              t("Crawl → clean → embed", "抓取 → 清洗 → 向量化")
-            )}
-          </CardDescription>
+          <CardTitle>
+            {t("Steps in this round", "这一轮各阶段")}
+            {total != null && ` · ${t.ms(total)}`}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          {round.error && (
+            <p className="[overflow-wrap:anywhere] text-destructive">
+              {round.error}
+            </p>
+          )}
           <Segments
             parts={STAGES.map((s) => ({
               label: t(...s.label),
@@ -818,7 +806,7 @@ export async function PatchDiff({
       <summary className="cursor-pointer font-medium">
         {t("Patch", "补丁")}
       </summary>
-      <pre className="mt-2 max-h-[480px] w-0 min-w-full overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5">
+      <pre className="mt-2 max-h-[480px] w-0 min-w-full overflow-auto rounded-in-card bg-muted/50 p-3 font-mono text-xs leading-5">
         <span className="block w-max min-w-full">
           {diff.split("\n").map((line, i) => (
             <span

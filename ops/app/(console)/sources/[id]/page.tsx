@@ -35,6 +35,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -118,9 +119,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
     : null
   const lastOkRun = runs.find((r) => r.status === "ok")
   const host = items.map((i) => URL.parse(i.url ?? "")?.host).find(Boolean)
-  // An approved patch that ran after this round and still wrote nothing (when it wrote, the source isn't failing)
-  const verify = s.repair?.state === "observing" ? s.repair.verify : null
-  const verifiedLater = verify && verify.ts > s.run.finished_at ? verify : null
   // Consecutive rounds that wrote nothing, counting back from this one.
   const streak =
     s.history.length - 1 - s.history.findLastIndex((h) => !failed(h))
@@ -162,13 +160,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
             )
           }
         >
-          <span className="font-mono">
-            {s.id}
-            {host && ` · ${host}`} ·{" "}
-            {s.run.status === "disabled"
-              ? t("disabled", "已停用")
-              : t("every hour", "每小时一轮")}
-          </span>
+          <span className="font-mono">{s.id}</span>
         </PageTitle>
 
         {failing(s) && (
@@ -185,15 +177,12 @@ export default async function SourceDetail({ params, searchParams }: Props) {
               )}
             </AlertTitle>
             <AlertDescription>
-              {s.run.status === "empty" ? (
-                t(
-                  "The request worked, but no items were parsed.",
-                  "请求成功了，但没解析出条目。"
-                )
-              ) : (
-                <span className="font-mono break-all">{s.run.error}</span>
+              {s.run.status !== "empty" && (
+                <>
+                  <span className="font-mono break-all">{s.run.error}</span>
+                  <br />
+                </>
               )}
-              <br />
               {lastOkRun
                 ? t(
                     `Last write ${t.time(lastOkRun.finished_at)}, ${count(lastOkRun.items ?? 0, "item")}. `,
@@ -220,15 +209,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                       `${seen.filter((h) => h.status === "ok").length} of the ${count(seen.length - 1, "round")} before were OK.`,
                       `之前 ${seen.length - 1} 轮里 ${seen.filter((h) => h.status === "ok").length} 轮正常。`
                     )}
-              {verifiedLater && (
-                <>
-                  <br />
-                  {t(
-                    `After the patch was approved at ${t.time(verifiedLater.ts)}, the new code ran once and still wrote nothing. The status here updates with the next round.`,
-                    `${t.time(verifiedLater.ts)} 批准补丁后用新代码跑过一次，还是没写入。这里的状态下一轮才更新。`
-                  )}
-                </>
-              )}
             </AlertDescription>
           </Alert>
         )}
@@ -241,12 +221,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                 `这一轮只有 ${s.run.items} 条，平时 ${s.usual} 条`
               )}
             </AlertTitle>
-            <AlertDescription>
-              {t(
-                "Written, but fewer than half the usual count: maybe only part of the page was parsed.",
-                "写入了，但条数不到平时的一半，可能只解析到了一部分页面。"
-              )}
-            </AlertDescription>
           </Alert>
         )}
         {s.run.status === "disabled" && (
@@ -291,37 +265,22 @@ export default async function SourceDetail({ params, searchParams }: Props) {
             label={t("Usual count", "平时条数")}
             value={fmtNum(s.usual)}
             note={
-              s.usual == null
-                ? t(
-                    "fewer than 5 successes, can't tell yet",
-                    "成功不到 5 次，算不出"
-                  )
-                : t(
-                    `median of the last ${count(Math.min(20, seen.filter((h) => h.status === "ok").length), "success", "successes")}`,
-                    `最近 ${Math.min(20, seen.filter((h) => h.status === "ok").length)} 次成功的中位数`
-                  )
+              s.usual == null &&
+              t(
+                "fewer than 5 successes, can't tell yet",
+                "成功不到 5 次，算不出"
+              )
             }
           />
           <Stat
             label={t("Succeeded", "成功")}
             value={seen.filter((h) => h.status === "ok").length}
             unit={`/ ${seen.length}`}
-            note={t(
-              `last ${count(seen.length, "round")}`,
-              `最近 ${seen.length} 轮`
-            )}
           />
           <Stat
             label={t("Average time", "平均耗时")}
             value={t.ms(avg)}
-            note={
-              times.length
-                ? t(
-                    `last ${count(times.length, "round")}`,
-                    `最近 ${times.length} 轮`
-                  )
-                : t("no timings on record", "没有耗时记录")
-            }
+            note={!times.length && t("no timings on record", "没有耗时记录")}
           />
         </div>
 
@@ -329,12 +288,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           <Card>
             <CardHeader>
               <CardTitle>{t("Items per round", "每轮条数")}</CardTitle>
-              <CardDescription>
-                {t(
-                  `Last ${count(board.rounds.length, "round")}: red wrote nothing, orange is a low count. Click a bar to open its round`,
-                  `最近 ${board.rounds.length} 轮，红色是没写入的轮次，橙色是条数偏低；点柱子看那一轮`
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
               <RoundBars
@@ -364,19 +317,13 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           <Card>
             <CardHeader>
               <CardTitle>{t("Latest items", "最近写入的条目")}</CardTitle>
-              <CardDescription>
-                {items.length
-                  ? t(
-                      `Titles after cleaning, last seen ${t.time(items[0].last_seen)}`,
-                      `清洗后的标题，${t.time(items[0].last_seen)} 最后出现`
-                    )
-                  : t(
-                      "No titles from this source in the cleaned table yet",
-                      "清洗后的表里还没有这个源的标题"
-                    )}
-              </CardDescription>
             </CardHeader>
             <CardContent className="max-h-[480px] overflow-y-auto">
+              {!items.length && (
+                <p className="text-muted-foreground">
+                  {t("No titles from this source yet", "这个源还没有标题")}
+                </p>
+              )}
               <ol className="flex flex-col gap-2.5">
                 {items.map((it, i) => (
                   <li key={i} className="flex gap-2.5 text-sm">
@@ -410,12 +357,6 @@ export default async function SourceDetail({ params, searchParams }: Props) {
         <Card className="py-2">
           <CardHeader className="pt-4">
             <CardTitle>{t("Run history", "运行记录")}</CardTitle>
-            <CardDescription>
-              {t(
-                `Last ${count(runs.length, "round")}, newest first`,
-                `最近 ${runs.length} 轮，新的在前`
-              )}
-            </CardDescription>
           </CardHeader>
           <Table>
             <TableHeader>
@@ -482,18 +423,14 @@ export default async function SourceDetail({ params, searchParams }: Props) {
           <Card id="config">
             <CardHeader>
               <CardTitle>{t("Config", "配置")}</CardTitle>
-              <CardDescription>
-                {t(
-                  `The files in sources/${s.id}/ of the hotToday repo, read-only; hard-coded cookies and tokens are hidden.`,
-                  `hotToday 仓库 sources/${s.id}/ 里的文件，只读；写死的 cookie 和 token 已隐藏。`
-                )}
+              <CardAction>
                 <Link
                   href="/config"
-                  className="ml-1 underline-offset-4 hover:underline"
+                  className="text-sm text-muted-foreground underline-offset-4 hover:underline"
                 >
                   {t("All sources' config", "所有源的配置")}
                 </Link>
-              </CardDescription>
+              </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {files.map((f, i) => (
@@ -507,7 +444,7 @@ export default async function SourceDetail({ params, searchParams }: Props) {
                       )}
                     </span>
                   </summary>
-                  <pre className="mt-2 max-h-[560px] w-0 min-w-full overflow-auto rounded-xl bg-muted/50 p-3 font-mono text-xs leading-5">
+                  <pre className="mt-2 max-h-[560px] w-0 min-w-full overflow-auto rounded-in-card bg-muted/50 p-3 font-mono text-xs leading-5">
                     {f.text}
                   </pre>
                 </details>
@@ -602,28 +539,25 @@ async function RepairCard({
           {t("AI repair", "AI 修复")}
           {r && <RepairBadge state={r.state} />}
         </CardTitle>
-        <CardDescription>
-          {r
-            ? [
-                `#${r.id}`,
-                by === "system"
-                  ? t(
-                      `started automatically ${t.time(r.created_at)}`,
-                      `${t.time(r.created_at)} 自动开始`
-                    )
-                  : t(
-                      `started by ${by} ${t.time(r.created_at)}`,
-                      `${t.time(r.created_at)} ${by} 手动开始`
-                    ),
-                r.model && modelLine(t, r),
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : t(
-                "After two failed rounds in a row, the end of a round starts an analysis by itself; you can also start one now. A patch only goes in once someone approves it.",
-                "连续两轮失败时，每轮结束会自动分析；也可以现在手动开始。补丁要人批准才会写进去。"
-              )}
-        </CardDescription>
+        {r && (
+          <CardDescription>
+            {[
+              `#${r.id}`,
+              by === "system"
+                ? t(
+                    `started automatically ${t.time(r.created_at)}`,
+                    `${t.time(r.created_at)} 自动开始`
+                  )
+                : t(
+                    `started by ${by} ${t.time(r.created_at)}`,
+                    `${t.time(r.created_at)} ${by} 手动开始`
+                  ),
+              r.model && modelLine(t, r),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         {r && (
@@ -709,7 +643,7 @@ async function VerifyRun({
   return (
     <div
       className={cn(
-        "flex items-start gap-2 rounded-xl px-3 py-2",
+        "flex items-start gap-2 rounded-in-card px-3 py-2",
         ok ? "bg-emerald-500/10" : "bg-destructive/5 text-destructive"
       )}
     >
@@ -735,12 +669,6 @@ async function VerifyRun({
                 : `出错，没写入：${v.error}。`
           }${timedOut ? ` 批准时最多等 ${v.limit} 秒，整点那轮按源自己的超时再跑。` : ""}`
         )}
-        <span className="text-muted-foreground">
-          {t(
-            " The next two rounds tell whether it recovered.",
-            " 是否恢复看之后的两轮。"
-          )}
-        </span>
       </span>
     </div>
   )

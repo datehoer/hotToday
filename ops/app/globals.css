@@ -133,6 +133,12 @@
   }
 }
 
+/* A surface inside a card (code, a note, a message): its corners follow the card's, so its radius is the
+   card's less the card's padding (12.4px in a card, 20.4px in a small one). */
+@utility rounded-in-card {
+  border-radius: calc(--theme(--radius-4xl) - var(--card-spacing, 1.5rem));
+}
+
 /* The bar under the header while a page loads (PageSkeleton). */
 @keyframes loading-bar {
   from {

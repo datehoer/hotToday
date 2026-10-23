@@ -18,13 +18,7 @@ import {
   STAGES,
 } from "@/components/ops"
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { count, type Translate } from "@/lib/i18n"
 import {
@@ -74,7 +68,6 @@ export default async function Overview() {
   ).filter((r) => sources.some((s) => s.id === r.source))
   // A source is "new" when it wrote data in the round before this one.
   const isNew = (s: Source) => s.history.at(-2)?.status === "ok"
-  const fresh = failing.filter(isNew)
   const groups = Map.groupBy(failing, (s) => cause(s.run)!)
   const round = (r: { started_at: number }) =>
     t(`${t.time(r.started_at)} round`, `${t.time(r.started_at)} 这一轮`)
@@ -85,10 +78,6 @@ export default async function Overview() {
   const prevOk = rounds.at(-2)
     ? sources.filter((s) => s.history.at(-2)?.status === "ok").length
     : null
-  const total =
-    latest.crawl_ms != null && latest.etl_ms != null && latest.embed_ms != null
-      ? latest.crawl_ms + latest.etl_ms + latest.embed_ms
-      : null
 
   return (
     <>
@@ -98,23 +87,7 @@ export default async function Overview() {
       />
       {running && <AutoRefresh seconds={15} />}
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title={t("Overview", "概况")}>
-          {t(
-            `The ${t.time(latest.started_at)} round ${phase(latest) === "done" ? "finished" : "didn't finish"}${total != null ? ` in ${t.ms(total)}` : ""}. `,
-            `${t.time(latest.started_at)} 这一轮${PHASE[phase(latest)][1]}${total != null ? `，用时 ${t.ms(total)}` : ""}。`
-          )}
-          {failing.length === 0
-            ? t("Every source wrote data.", "所有源都写入了。")
-            : fresh.length
-              ? t(
-                  `${count(failing.length, "source")} wrote nothing; ${fresh.length} of them ${fresh.length === 1 ? "is" : "are"} new this round.`,
-                  `${failing.length} 个源没写入，其中 ${fresh.length} 个是这一轮新出现的。`
-                )
-              : t(
-                  `${count(failing.length, "source")} wrote nothing; ${failing.length === 1 ? "it was" : "all of them were"} broken before this round.`,
-                  `${failing.length} 个源没写入，都是之前就坏的。`
-                )}
-        </PageTitle>
+        <PageTitle title={t("Overview", "概况")} />
 
         {running && (
           <Card size="sm">
@@ -161,12 +134,6 @@ export default async function Overview() {
                   `最近 ${rounds.length} 轮没写入的源`
                 )}
               </CardTitle>
-              <CardDescription>
-                {t(
-                  "One round an hour; the taller the bar, the more sources failed. Click a bar to open its round",
-                  "每小时一轮，柱子越高坏的越多；点柱子看那一轮"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex-1">
               <RoundBars
@@ -196,19 +163,16 @@ export default async function Overview() {
           <Card>
             <CardHeader>
               <CardTitle>{t("Needs attention", "需要处理")}</CardTitle>
-              <CardDescription>
-                {failing.length
-                  ? t(
-                      `The ${count(failing.length, "source")} that wrote nothing this round, by cause`,
-                      `这一轮没写入的 ${failing.length} 个源，按原因分组`
-                    )
-                  : t(
-                      "Every source wrote data this round",
-                      "这一轮所有源都写入了"
-                    )}
-              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {failing.length === 0 && (
+                <p className="text-muted-foreground">
+                  {t(
+                    "Every source wrote data this round",
+                    "这一轮所有源都写入了"
+                  )}
+                </p>
+              )}
               {repairs.length > 0 && (
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
@@ -322,12 +286,6 @@ export default async function Overview() {
           <Card>
             <CardHeader>
               <CardTitle>{t("New titles per round", "每轮新增标题")}</CardTitle>
-              <CardDescription>
-                {t(
-                  "Titles seen for the first time after cleaning; click a bar to open its round",
-                  "清洗后第一次出现的标题；点柱子看那一轮"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <RoundBars
@@ -346,12 +304,6 @@ export default async function Overview() {
           <Card>
             <CardHeader>
               <CardTitle>{t("Time per round", "每轮用时")}</CardTitle>
-              <CardDescription>
-                {t(
-                  "How long crawling, cleaning and embedding took; click a bar to open its round",
-                  "抓取、清洗、向量化各用了多久；点柱子看那一轮"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <StackBars
@@ -379,12 +331,6 @@ export default async function Overview() {
                   `这一轮最慢的 ${slowest.length} 个源`
                 )}
               </CardTitle>
-              <CardDescription>
-                {t(
-                  "A source may run up to 5 min (json 30 s, rss 25 s); slow ones stretch the whole round",
-                  "一个源最多跑 5 分钟（json 30 秒、rss 25 秒），慢的拖长整轮"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               <BarList
@@ -435,7 +381,7 @@ function SourceLink({ s, note }: { s: Source; note: string }) {
   return (
     <Link
       href={`/sources/${s.id}`}
-      className="-mx-2 flex h-8 items-center gap-2 rounded-lg px-2 hover:bg-muted"
+      className="-mx-2 flex h-8 items-center gap-2 rounded-xl px-2 hover:bg-muted"
     >
       <span className="flex-1 truncate">{s.name}</span>
       <span className="text-xs text-muted-foreground tabular-nums">{note}</span>

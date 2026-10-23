@@ -6,13 +6,7 @@ import { AutoRefresh, LoadMore } from "@/components/ops-client"
 import { Facts, PageHeader, PageTitle, PillNav, Stat } from "@/components/ops"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -100,12 +94,7 @@ export default async function Status({
       <PageHeader crumbs={[[t("Ops", "运维"), "/"], [t("Status", "状态")]]} />
       <AutoRefresh seconds={30} />
       <div className="flex flex-col gap-5 p-4 md:p-6">
-        <PageTitle title={t("Status", "状态")}>
-          {t(
-            "The proxy, PostgreSQL and Redis the crawler uses, checked when the page opens and every 30 seconds.",
-            "爬虫用到的代理、PostgreSQL 和 Redis，打开时现查，每 30 秒刷新一次。"
-          )}
-        </PageTitle>
+        <PageTitle title={t("Status", "状态")} />
 
         <div className="grid gap-3 sm:grid-cols-3 md:gap-4">
           <Stat
@@ -225,12 +214,6 @@ export default async function Status({
                   {"error" in pg ? down : up}
                 </Health>
               </CardTitle>
-              <CardDescription>
-                {t(
-                  "The postgres-main container, 127.0.0.1:5432; read here with a read-only account",
-                  "postgres-main 容器，127.0.0.1:5432；这里用只读账号查"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {"error" in pg ? (
@@ -280,12 +263,6 @@ export default async function Status({
                 Redis
                 <Health tone={info ? "ok" : "bad"}>{info ? up : down}</Health>
               </CardTitle>
-              <CardDescription>
-                {t(
-                  "The redis-main container, 127.0.0.1:6379; hot-rank-web caches in db7",
-                  "redis-main 容器，127.0.0.1:6379；hot-rank-web 的缓存在 db7"
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {!info ? (
@@ -400,16 +377,19 @@ function ProxyCard({
     <Card className="py-2">
       <CardHeader className="pt-4">
         <CardTitle>{t("Proxy subpool", "代理 subpool")}</CardTitle>
-        <CardDescription>
-          {t(
-            `subpool.service, /srv/projects/subpool · version ${p.version} · up ${t.uptime(pool.uptime_sec)} · strategy ${pool.strategy} · nodes checked every ${pool.check_interval_sec} s`,
-            `subpool.service，/srv/projects/subpool · 版本 ${p.version} · 已运行 ${t.uptime(pool.uptime_sec)} · 调度 ${pool.strategy} · 每 ${pool.check_interval_sec} 秒检测一次节点`
-          )}
-        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Facts
           rows={[
+            [t("Version", "版本"), p.version],
+            [t("Up for", "已运行"), t.uptime(pool.uptime_sec)],
+            [
+              t("Strategy", "调度"),
+              t(
+                `${pool.strategy}, nodes checked every ${pool.check_interval_sec} s`,
+                `${pool.strategy}，每 ${pool.check_interval_sec} 秒检测一次节点`
+              ),
+            ],
             [
               t("Subscriptions", "订阅"),
               <span key="v">
