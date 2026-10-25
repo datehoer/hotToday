@@ -3,6 +3,7 @@ import pyquery
 import json
 import re
 
+
 def get_youshedubao_data():
     url = "https://www.uisdc.com/news"
     headers = {
@@ -30,5 +31,13 @@ def get_youshedubao_data():
     matches = re.findall('var uisdc_news = "(.*?)";', items)
     if not matches:
         return {"data": []}
-    uisdc_news = json.loads(matches[0].replace('\\"', '"').replace("\\\\", "\\"))
+    raw = matches[0]
+    # 页面里的 JSON 是 JS 字符串字面量，其中出现了 JS 的 \' 转义（如 It\'s），
+    # 这不是合法 JSON 转义，先还原成单引号，再按 JSON 字符串字面量解码。
+    raw = raw.replace("\\'", "'")
+    try:
+        text = json.loads('"' + raw + '"')
+    except (json.JSONDecodeError, TypeError):
+        text = raw
+    uisdc_news = json.loads(text)
     return {"data": uisdc_news}
