@@ -1,0 +1,19 @@
+key: spiegel
+name: SPIEGEL（德国头条）
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 1
+proxy: none
+
+fetch:
+  type: rss
+  url: https://www.spiegel.de/schlagzeilen/tops/index.rss
+
+extract:
+  list: $
+  generic_fallback: false
+  fields:
+    title: title
+    url: url
+    heat: hotScore

@@ -1,0 +1,19 @@
+key: nzherald
+name: NZ Herald（新西兰新闻）
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 1
+proxy: none
+
+fetch:
+  type: rss
+  url: https://www.nzherald.co.nz/arc/outboundfeeds/rss/section/nz/?outputType=xml
+
+extract:
+  list: $
+  generic_fallback: false
+  fields:
+    title: title
+    url: url
+    heat: hotScore

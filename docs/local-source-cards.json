@@ -1,0 +1,94 @@
+[
+  {
+    "name": "CBC（加拿大新闻）",
+    "tablename": "cbc"
+  },
+  {
+    "name": "Global News（加拿大最新）",
+    "tablename": "globalnews"
+  },
+  {
+    "name": "CTV News（加拿大最新）",
+    "tablename": "ctv"
+  },
+  {
+    "name": "National Post（加拿大最新）",
+    "tablename": "nationalpost"
+  },
+  {
+    "name": "Radio-Canada（加拿大法语要闻）",
+    "tablename": "radiocanada"
+  },
+  {
+    "name": "SPIEGEL（德国头条）",
+    "tablename": "spiegel"
+  },
+  {
+    "name": "ZEIT（德国最新）",
+    "tablename": "zeit"
+  },
+  {
+    "name": "heise（德国科技最新）",
+    "tablename": "heise"
+  },
+  {
+    "name": "Süddeutsche（德国要闻）",
+    "tablename": "sueddeutsche"
+  },
+  {
+    "name": "mydealz（德国社区优惠）",
+    "tablename": "mydealz"
+  },
+  {
+    "name": "Naver（韩国各媒体热读）",
+    "tablename": "naver_news"
+  },
+  {
+    "name": "NEWSIS（韩国热读）",
+    "tablename": "newsis"
+  },
+  {
+    "name": "Bizwatch（韩国财经热读）",
+    "tablename": "bizwatch"
+  },
+  {
+    "name": "DC Inside（韩国实时精选）",
+    "tablename": "dcinside"
+  },
+  {
+    "name": "Nate Pann（韩国热帖）",
+    "tablename": "nate_pann"
+  },
+  {
+    "name": "ABC（澳大利亚头条）",
+    "tablename": "abc_au"
+  },
+  {
+    "name": "SBS（澳大利亚头条）",
+    "tablename": "sbs_au"
+  },
+  {
+    "name": "OzBargain（澳大利亚社区优惠）",
+    "tablename": "ozbargain"
+  },
+  {
+    "name": "Stuff（新西兰最新）",
+    "tablename": "stuff"
+  },
+  {
+    "name": "NZ Herald（新西兰新闻）",
+    "tablename": "nzherald"
+  },
+  {
+    "name": "1News（新西兰头条）",
+    "tablename": "tvnz"
+  },
+  {
+    "name": "Cheapies（新西兰社区优惠）",
+    "tablename": "cheapies"
+  },
+  {
+    "name": "Geekzone（新西兰最新讨论）",
+    "tablename": "geekzone"
+  }
+]

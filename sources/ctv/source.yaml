@@ -1,0 +1,19 @@
+key: ctv
+name: CTV News（加拿大最新）
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 1
+proxy: none
+
+fetch:
+  type: rss
+  url: https://www.ctvnews.ca/arc/outboundfeeds/rss/?outputType=xml
+
+extract:
+  list: $
+  generic_fallback: false
+  fields:
+    title: title
+    url: url
+    heat: hotScore

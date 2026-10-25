@@ -8,7 +8,7 @@
 
 ## 主要功能
 
-- **84 个来源插件**：覆盖国内外新闻、社区、科技、财经、游戏与设计，每个来源独立维护 `sources/<key>/` 中的抓取和提取规则。
+- **107 个来源插件**：覆盖国内外新闻、社区、科技、财经、游戏与设计，每个来源独立维护 `sources/<key>/` 中的抓取和提取规则。
 - **按小时采集**：每个来源可配置超时、重试、代理与依赖检查，原始快照和运行记录写入 PostgreSQL。
 - **增量 ETL**：统一清洗标题、链接与热度，汇总到 `hot_topic`，支持向量化与断点续跑。
 - **运维后台**：查看来源状态、最近 24 轮历史、条数偏低提醒、耗时、修复进度和服务状态，内置中英文切换。
@@ -68,12 +68,12 @@ python task.py --check
 
 `--check` 会检查全部来源定义并报告缺失依赖。使用 `subpool` 代理的来源需要配置对应代理地址；有额外依赖的来源，需安装其 `requires` 中声明的包、程序或环境路径，也可以使用 Docker 镜像。
 
-| 命令                                  | 用途                                 |
-| ------------------------------------- | ------------------------------------ |
-| `python task.py --check`              | 校验来源定义与依赖                   |
-| `python task.py --only google_search` | 单独试抓，不写入数据库               |
-| `python task.py --config`             | 查看生效的来源和修复配置             |
-| `python task.py`                      | 执行完整采集、ETL 及已配置的后续任务 |
+| 命令                        | 用途                                 |
+| --------------------------- | ------------------------------------ |
+| `python task.py --check`    | 校验来源定义与依赖                   |
+| `python task.py --only cbc` | 单独试抓，不写入数据库               |
+| `python task.py --config`   | 查看生效的来源和修复配置             |
+| `python task.py`            | 执行完整采集、ETL 及已配置的后续任务 |
 
 第一次完整运行前，使用自己的 PostgreSQL 连接初始化 ETL 表：
 
@@ -98,6 +98,18 @@ python task.py
 
 具体可用状态以 [来源定义](sources/) 为准。停用的插件仍保留在目录中，并填写 `enabled: false` 和 `disabled_reason`。
 
+现已直接接入以下五国的 23 个当地来源：
+
+| 国家     | 当地媒体与社区                                                 |
+| -------- | -------------------------------------------------------------- |
+| 加拿大   | CBC、Global News、CTV News、National Post、Radio-Canada        |
+| 德国     | SPIEGEL、ZEIT、heise、南德意志报、mydealz                      |
+| 韩国     | Naver 各媒体热读、NEWSIS、Business Watch、DC Inside、Nate Pann |
+| 澳大利亚 | ABC News、SBS News、OzBargain                                  |
+| 新西兰   | Stuff、NZ Herald、TVNZ 1News、ChoiceCheapies、Geekzone         |
+
+使用各站自己的订阅源或页面，保留原标题与链接，并区分最新新闻、编辑头条和热门榜单；有浏览数、投票数或站内温度值的来源保留原热度单位。入口、验证方式和发布时所需的前台卡片配置见[当地来源目录](docs/local-sources.zh-CN.md)。
+
 简单的 RSS 来源只需一个定义文件，使用时将示例地址替换为实际订阅地址：
 
 ```yaml
@@ -112,7 +124,8 @@ fetch:
   type: rss
   url: https://example.com/feed.xml
 extract:
-  list: data
+  list: $
+  generic_fallback: false
   fields:
     title: title
     url: url
@@ -121,7 +134,9 @@ extract:
 
 接口来源使用 `fetch.type: json`；需要自定义解析时，使用 `fetch.type: python`，例如 `entry: spider:get_data`。定义文件还控制重试、超时、代理和额外依赖。提取规则支持嵌套路径、回退值、URL 模板和正则，完整说明见 [plugins.py](plugins.py) 开头。
 
-请求或解析失败时应抛出异常，让运行记录保留原因。新来源按目录自动发现，第一次成功写入时自动创建来源表。
+请求或解析失败时应抛出异常，让运行记录保留原因。新来源按目录自动发现，第一次成功写入时自动创建来源表。入库前会解开顶层 `data` 数组，因此针对已存列表的提取规则使用 `list: $`。
+
+使用 `python -m unittest discover -s tests -v` 运行当地来源的解析与提取测试；测试使用虚构数据，不访问网络和数据库。
 
 ## AI 修复
 

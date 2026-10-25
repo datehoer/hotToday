@@ -8,7 +8,7 @@ An hourly crawler for trending topics, news and community discussions, with sour
 
 ## What it does
 
-- **84 source plugins** for Chinese and international news, communities, technology, finance, games and design. Each source owns its fetch and extraction rules in `sources/<key>/`.
+- **107 source plugins** for Chinese and international news, communities, technology, finance, games and design. Each source owns its fetch and extraction rules in `sources/<key>/`.
 - **Hourly collection** with per-source timeouts, retries, proxy selection and dependency checks. Raw snapshots and run results go to PostgreSQL.
 - **Incremental ETL** normalizes titles, links and heat values into `hot_topic`, with resumable embedding backfills.
 - **Ops console** shows source health, 24-round history, low item counts, timings, repair activity and service status. English and Chinese are built in.
@@ -68,12 +68,12 @@ python task.py --check
 
 `--check` validates every source manifest and reports missing dependencies. Configure the `subpool` proxy URL if you use sources that select it. For a source that needs extra packages, binaries or environment paths, install the dependencies listed in its `requires` block, or use the Docker image.
 
-| Command                               | Purpose                                                            |
-| ------------------------------------- | ------------------------------------------------------------------ |
-| `python task.py --check`              | Validate source definitions and dependencies                       |
-| `python task.py --only google_search` | Fetch one source without writing to the database                   |
-| `python task.py --config`             | Inspect the effective source and repair configuration              |
-| `python task.py`                      | Run a complete collection round, ETL and configured follow-up work |
+| Command                     | Purpose                                                            |
+| --------------------------- | ------------------------------------------------------------------ |
+| `python task.py --check`    | Validate source definitions and dependencies                       |
+| `python task.py --only cbc` | Fetch one source without writing to the database                   |
+| `python task.py --config`   | Inspect the effective source and repair configuration              |
+| `python task.py`            | Run a complete collection round, ETL and configured follow-up work |
 
 Before the first full round, initialize the ETL tables using your configured PostgreSQL connection:
 
@@ -98,6 +98,18 @@ Each source is a directory under `sources/`. Its `key` is also the source table 
 
 The [source manifests](sources/) are the source of truth for availability. A disabled plugin stays in the catalog with `enabled: false` and a `disabled_reason`.
 
+Direct local coverage now includes 23 sources from five countries:
+
+| Country     | Local publishers and communities                                       |
+| ----------- | ---------------------------------------------------------------------- |
+| Canada      | CBC, Global News, CTV News, National Post, Radio-Canada                |
+| Germany     | SPIEGEL, ZEIT, heise, Süddeutsche Zeitung, mydealz                     |
+| South Korea | Naver publisher rankings, NEWSIS, Business Watch, DC Inside, Nate Pann |
+| Australia   | ABC News, SBS News, OzBargain                                          |
+| New Zealand | Stuff, NZ Herald, TVNZ 1News, ChoiceCheapies, Geekzone                 |
+
+These use the sites' own feeds and pages, preserving original-language titles and links. News, editorial headlines and popularity lists are identified separately; available view counts, votes and site temperatures retain their original units. See the [local source catalog](docs/local-sources.md) for entry points, validation and the frontend card payload needed during rollout.
+
 A simple RSS source needs only a manifest; replace the example URL with a real feed:
 
 ```yaml
@@ -112,7 +124,8 @@ fetch:
   type: rss
   url: https://example.com/feed.xml
 extract:
-  list: data
+  list: $
+  generic_fallback: false
   fields:
     title: title
     url: url
@@ -121,7 +134,9 @@ extract:
 
 Use `fetch.type: json` for an API, or `fetch.type: python` with an entry such as `spider:get_data` for custom parsing. The manifest also controls retries, timeouts, proxy selection and optional dependencies. Extraction supports nested paths, fallbacks, URL templates and regular expressions; see the contract at the top of [plugins.py](plugins.py).
 
-Raise an exception when a fetch or parser fails so the run record preserves the cause. New sources are discovered from their directories; the first successful write creates the source table automatically.
+Raise an exception when a fetch or parser fails so the run record preserves the cause. New sources are discovered from their directories; the first successful write creates the source table automatically. The crawler unwraps a top-level `data` array before storing snapshots, so extraction for a stored list uses `list: $`.
+
+Run the local-source parser and extraction checks with `python -m unittest discover -s tests -v`; they use fictional fixtures without network or database access.
 
 ## AI repair
 

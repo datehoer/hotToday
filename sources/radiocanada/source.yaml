@@ -1,0 +1,19 @@
+key: radiocanada
+name: Radio-Canada（加拿大法语要闻）
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 1
+proxy: none
+
+fetch:
+  type: rss
+  url: https://ici.radio-canada.ca/info/rss/info/a-la-une
+
+extract:
+  list: $
+  generic_fallback: false
+  fields:
+    title: title
+    url: url
+    heat: hotScore

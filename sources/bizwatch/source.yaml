@@ -1,0 +1,19 @@
+key: bizwatch
+name: Bizwatch（韩国财经热读）
+enabled: true
+schedule: hourly
+timeout: 30s
+retries: 1
+proxy: none
+
+fetch:
+  type: python
+  entry: spider:get_data
+
+extract:
+  list: $
+  generic_fallback: false
+  fields:
+    title: title
+    url: url
+    heat: hotScore
