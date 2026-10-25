@@ -11,6 +11,7 @@ import {
   RiLogoutBoxRLine,
   RiPulseLine,
   RiRobot2Line,
+  RiRefreshLine,
   RiSendPlane2Line,
   RiSettings3Line,
   RiTranslate2,
@@ -647,7 +648,15 @@ export function LoadingBar() {
 /** No sign-up link: accounts only exist in the server's .env.local. */
 export function LoginForm({ next }: { next: string }) {
   const t = useT()
-  const [error, action, pending] = useActionState(login, null)
+  const [state, action, pending] = useActionState(login, {
+    error: null,
+    attempt: 0,
+  })
+  const [refresh, setRefresh] = useState(0)
+  const [loadedImage, setLoadedImage] = useState("")
+  const [brokenImage, setBrokenImage] = useState("")
+  const image = `/login/captcha?attempt=${state.attempt}&refresh=${refresh}`
+  const ready = loadedImage === image
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center gap-3 text-center">
@@ -684,12 +693,97 @@ export function LoginForm({ next }: { next: string }) {
               className="h-11 md:h-9"
             />
           </div>
-          {error && (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="captcha">{t("Verification code", "验证码")}</Label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex h-[72px] min-w-0 flex-1 items-center justify-center overflow-hidden rounded-md border bg-[#edf4f3]">
+                {!ready && brokenImage !== image && (
+                  <Spinner
+                    aria-label={t(
+                      "Loading verification code",
+                      "正在加载验证码"
+                    )}
+                  />
+                )}
+                {/* A changing, private image: Next's image optimizer must never cache it. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  key={image}
+                  ref={(node) => {
+                    // The server-rendered image can finish before React attaches onLoad.
+                    if (node?.complete && node.naturalWidth > 0)
+                      setLoadedImage(image)
+                  }}
+                  src={image}
+                  alt={t(
+                    "Enter the five characters in this image",
+                    "请输入图片中的五位字符"
+                  )}
+                  width={200}
+                  height={72}
+                  className={cn(
+                    "absolute h-[72px] max-w-full object-contain",
+                    !ready && "opacity-0"
+                  )}
+                  onLoad={() => setLoadedImage(image)}
+                  onError={() => setBrokenImage(image)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-[72px] w-11 shrink-0"
+                disabled={pending}
+                onClick={() => setRefresh((n) => n + 1)}
+                aria-label={t("Get a new verification code", "换一张验证码")}
+                title={t("Get a new code", "换一张")}
+              >
+                <RiRefreshLine />
+              </Button>
+            </div>
+            <Input
+              key={image}
+              id="captcha"
+              name="captcha"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={5}
+              minLength={5}
+              required
+              disabled={pending || !ready}
+              aria-describedby="captcha-hint"
+              className="h-11 font-mono tracking-[0.3em] uppercase md:h-9"
+            />
+            <p
+              id="captcha-hint"
+              className={cn(
+                "text-xs text-muted-foreground",
+                brokenImage === image && "text-destructive"
+              )}
+              role={brokenImage === image ? "alert" : undefined}
+            >
+              {brokenImage === image
+                ? t(
+                    "Couldn't load the code. Try the refresh button.",
+                    "验证码加载失败，请点旁边的按钮换一张。"
+                  )
+                : t(
+                    "Five characters · case-insensitive · valid for 5 minutes",
+                    "五位字符 · 不区分大小写 · 五分钟内有效"
+                  )}
+            </p>
+          </div>
+          {state.error && (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {state.error}
             </p>
           )}
-          <Button type="submit" disabled={pending} className="h-11 md:h-9">
+          <Button
+            type="submit"
+            disabled={pending || !ready}
+            className="h-11 md:h-9"
+          >
             {pending && <Spinner data-icon="inline-start" aria-hidden />}
             {pending ? t("Signing in…", "登录中…") : t("Sign in", "登录")}
           </Button>

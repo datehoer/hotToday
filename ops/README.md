@@ -8,6 +8,9 @@ ops.example.com：hotToday 每小时一轮抓取的运维看板（概况 / 源 /
 - 运行：`hottoday-ops.service`（`/etc/systemd/system/`，openclaw 用户在本目录跑 `next start -H 127.0.0.1 -p 3210`），nginx 反代，见 `/etc/nginx/conf.d/ops.example.com.conf`。
 - 改完代码，在本目录：`pnpm build && sudo systemctl restart hottoday-ops`。爬虫镜像不含本目录（见上一级的 `.dockerignore`）。pnpm 通过 corepack 装在 `~/.local/bin`。
 - 登录：只有一个账号，配置在 `.env.local`（`AUTH_USER`、`AUTH_PASSWORD_HASH`、`AUTH_SECRET`），没有注册入口。`proxy.ts` 把未登录的请求转到 `/login`，`(console)` 下的页面和每次查库前还会再检查一次。
+- 登录前必须填写图片验证码：五位字符、不区分大小写、五分钟有效；每次提交（包括填错）后作废并自动换图，也可手动刷新。答案只保存在服务端内存的摘要里，浏览器只收到 PNG 和随机的 HttpOnly Cookie；服务器重启会使未提交的验证码失效，刷新即可。每个 IP 五分钟最多换图 30 次，验证码失败也计入原来的登录失败次数。当前单进程运行，扩成多个实例时需把验证码状态迁到共享存储。认证回归检查：`pnpm test:auth`。
+- 验证码图片由 `svg-captcha` 将既有答案绘成字体路径，再用 `sharp` 输出 PNG；随机答案和服务端校验仍由 `lib/captcha.ts` 管理。绘制使用本地 `lib/fonts/Geist-Regular.ttf`（原 ImageResponse 所用字体，OFL 许可见同目录），不依赖外部字体或系统字体。保留旋转、随机字号、深色文字和干扰线；直接 SVG 绘制避免通用 JSX 布局产生的逐节点遮罩，PNG 使用无损压缩等级 3。
+- 登录限流的 IP 由 nginx 确认：`cloudflare-real-ip.conf` 只信任 Cloudflare 网段，并用 `real_ip_header CF-Connecting-IP` 还原访客地址；本站 `location /` 必须设置 `proxy_set_header CF-Connecting-IP $remote_addr;`，覆盖客户端传入的同名头。只配置 real-ip 模块不会改写转发头，直连源站时仍可伪造限流 IP。Next.js 保持只监听 `127.0.0.1:3210`；迁移或重建 nginx 配置时也要保留这条覆盖规则。
 - 换密码：下面这行打印新的 `AUTH_PASSWORD_HASH=…`，替换 `.env.local` 里那行后重启服务，已登录的会话随之失效。换 `AUTH_SECRET` 也会让所有人下线。
 
   ```sh
