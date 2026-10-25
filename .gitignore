@@ -1,4 +1,5 @@
 .idea
+.venv/
 config.py
 .env*
 !.env.example
