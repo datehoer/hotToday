@@ -1,6 +1,7 @@
 .idea
 config.py
-.env
+.env*
+!.env.example
 **/__pycache__
 test.py
 .playwright-mcp/
