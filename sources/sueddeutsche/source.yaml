@@ -1,5 +1,5 @@
 key: sueddeutsche
-name: Süddeutsche（德国要闻）
+name: Süddeutsche
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: geekzone
-name: Geekzone（新西兰最新讨论）
+name: Geekzone
 enabled: true
 schedule: hourly
 timeout: 30s

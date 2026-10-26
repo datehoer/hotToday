@@ -1,5 +1,5 @@
 key: newsis
-name: NEWSIS（韩国热读）
+name: NEWSIS
 enabled: true
 schedule: hourly
 timeout: 30s

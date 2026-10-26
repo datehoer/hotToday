@@ -63,8 +63,9 @@ unique articles are retained. Numbered list positions are never stored as views.
 
 News and discussion sources retain at most 20–30 entries each, except Naver's
 broader publisher coverage. Missing popularity measurements use `hotScore: 0`,
-the existing crawler convention; this is not a measured score. Source names
-distinguish news, editorial headlines, most-read lists and community selections.
+the existing crawler convention; this is not a measured score. Display names use
+only the site name. The catalog separately describes news, editorial headlines,
+most-read lists and community selections.
 Scores have different units across sites and should not be compared directly.
 
 The plugins use the existing Python dependencies. Each custom parser is entirely

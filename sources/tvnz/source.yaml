@@ -1,5 +1,5 @@
 key: tvnz
-name: 1News（新西兰头条）
+name: 1News
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: nationalpost
-name: National Post（加拿大最新）
+name: National Post
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: spiegel
-name: SPIEGEL（德国头条）
+name: SPIEGEL
 enabled: true
 schedule: hourly
 timeout: 30s

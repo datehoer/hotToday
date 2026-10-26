@@ -1,5 +1,5 @@
 key: abc_au
-name: ABC（澳大利亚头条）
+name: ABC
 enabled: true
 schedule: hourly
 timeout: 30s

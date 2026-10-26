@@ -1,5 +1,5 @@
 key: ozbargain
-name: OzBargain（澳大利亚社区优惠）
+name: OzBargain
 enabled: true
 schedule: hourly
 timeout: 30s

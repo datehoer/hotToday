@@ -1,5 +1,5 @@
 key: globalnews
-name: Global News（加拿大最新）
+name: Global News
 enabled: true
 schedule: hourly
 timeout: 30s

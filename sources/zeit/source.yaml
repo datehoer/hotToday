@@ -1,5 +1,5 @@
 key: zeit
-name: ZEIT（德国最新）
+name: ZEIT
 enabled: true
 schedule: hourly
 timeout: 30s

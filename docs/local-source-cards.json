@@ -1,94 +1,94 @@
 [
   {
-    "name": "CBC（加拿大新闻）",
+    "name": "CBC",
     "tablename": "cbc"
   },
   {
-    "name": "Global News（加拿大最新）",
+    "name": "Global News",
     "tablename": "globalnews"
   },
   {
-    "name": "CTV News（加拿大最新）",
+    "name": "CTV News",
     "tablename": "ctv"
   },
   {
-    "name": "National Post（加拿大最新）",
+    "name": "National Post",
     "tablename": "nationalpost"
   },
   {
-    "name": "Radio-Canada（加拿大法语要闻）",
+    "name": "Radio-Canada",
     "tablename": "radiocanada"
   },
   {
-    "name": "SPIEGEL（德国头条）",
+    "name": "SPIEGEL",
     "tablename": "spiegel"
   },
   {
-    "name": "ZEIT（德国最新）",
+    "name": "ZEIT",
     "tablename": "zeit"
   },
   {
-    "name": "heise（德国科技最新）",
+    "name": "heise",
     "tablename": "heise"
   },
   {
-    "name": "Süddeutsche（德国要闻）",
+    "name": "Süddeutsche",
     "tablename": "sueddeutsche"
   },
   {
-    "name": "mydealz（德国社区优惠）",
+    "name": "mydealz",
     "tablename": "mydealz"
   },
   {
-    "name": "Naver（韩国各媒体热读）",
+    "name": "Naver",
     "tablename": "naver_news"
   },
   {
-    "name": "NEWSIS（韩国热读）",
+    "name": "NEWSIS",
     "tablename": "newsis"
   },
   {
-    "name": "Bizwatch（韩国财经热读）",
+    "name": "Bizwatch",
     "tablename": "bizwatch"
   },
   {
-    "name": "DC Inside（韩国实时精选）",
+    "name": "DC Inside",
     "tablename": "dcinside"
   },
   {
-    "name": "Nate Pann（韩国热帖）",
+    "name": "Nate Pann",
     "tablename": "nate_pann"
   },
   {
-    "name": "ABC（澳大利亚头条）",
+    "name": "ABC",
     "tablename": "abc_au"
   },
   {
-    "name": "SBS（澳大利亚头条）",
+    "name": "SBS",
     "tablename": "sbs_au"
   },
   {
-    "name": "OzBargain（澳大利亚社区优惠）",
+    "name": "OzBargain",
     "tablename": "ozbargain"
   },
   {
-    "name": "Stuff（新西兰最新）",
+    "name": "Stuff",
     "tablename": "stuff"
   },
   {
-    "name": "NZ Herald（新西兰新闻）",
+    "name": "NZ Herald",
     "tablename": "nzherald"
   },
   {
-    "name": "1News（新西兰头条）",
+    "name": "1News",
     "tablename": "tvnz"
   },
   {
-    "name": "Cheapies（新西兰社区优惠）",
+    "name": "Cheapies",
     "tablename": "cheapies"
   },
   {
-    "name": "Geekzone（新西兰最新讨论）",
+    "name": "Geekzone",
     "tablename": "geekzone"
   }
 ]

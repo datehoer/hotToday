@@ -1,5 +1,5 @@
 key: mydealz
-name: mydealz（德国社区优惠）
+name: mydealz
 enabled: true
 schedule: hourly
 timeout: 30s

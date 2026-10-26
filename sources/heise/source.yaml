@@ -1,5 +1,5 @@
 key: heise
-name: heise（德国科技最新）
+name: heise
 enabled: true
 schedule: hourly
 timeout: 30s

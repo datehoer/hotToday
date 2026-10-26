@@ -1,5 +1,5 @@
 key: cbc
-name: CBC（加拿大新闻）
+name: CBC
 enabled: true
 schedule: hourly
 timeout: 30s

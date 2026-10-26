@@ -1,5 +1,5 @@
 key: radiocanada
-name: Radio-Canada（加拿大法语要闻）
+name: Radio-Canada
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: stuff
-name: Stuff（新西兰最新）
+name: Stuff
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: bizwatch
-name: Bizwatch（韩国财经热读）
+name: Bizwatch
 enabled: true
 schedule: hourly
 timeout: 30s

@@ -1,5 +1,5 @@
 key: nate_pann
-name: Nate Pann（韩国热帖）
+name: Nate Pann
 enabled: true
 schedule: hourly
 timeout: 30s

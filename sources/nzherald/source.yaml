@@ -1,5 +1,5 @@
 key: nzherald
-name: NZ Herald（新西兰新闻）
+name: NZ Herald
 enabled: true
 schedule: hourly
 timeout: 30s
