@@ -74,7 +74,14 @@ python task.py --only cbc spiegel naver_news abc_au stuff
 
 独立的 `hot-rank-web` API 从 Redis 的 `card_table` 读取展示卡片。新增爬虫目录不会自动注册到这个运行目录中。[local-source-cards.json](local-source-cards.json) 已按该 API 的格式准备 23 个 `{name, tablename}` 条目。首次快照产生后，按 `tablename` 合并到原列表，保留其他卡片和顺序，再清除 API 的 `rank` 缓存。现有 `parse_common` 已支持这些插件入库后的 `{title, url, hotScore}` 对象列表，不需要另写排行解析器。
 
-Web Agent 的查询来源白名单另在 `hot-rank-web/hotrank/agent/` 管理，新增展示卡片不会自动开放 Agent 的来源筛选。本次准备了目录配置文件，没有修改线上 API 的 Redis 配置。
+配套 API 在 `hot-rank-web/hotrank/source_catalog.py` 注册这些来源及 Agent 查询名称。在 API 运行环境中，先预览，再执行可重复运行的目录合并：
+
+```bash
+docker exec hotrank python -m hotrank.source_catalog
+docker exec hotrank python -m hotrank.source_catalog --apply
+```
+
+该命令保留现有卡片和顺序，将新来源追加到显式配置的 Agent 白名单，并在同一个受监视的 Redis 事务中清除 `rank` 缓存。原目录会备份到输出的备份键，保留七天；未配置 Agent 白名单时继续使用应用默认值。部署更新后的 Python 来源注册表后，需要重启 API。
 
 ## 尚需可用公开入口的网站
 

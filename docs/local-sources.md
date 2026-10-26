@@ -97,10 +97,20 @@ snapshots exist. Invalidate the API's `rank` cache after updating the catalog.
 `parse_common` already accepts these plugins' stored list of
 `{title, url, hotScore}` objects; no new ranking parser is required.
 
-The web agent's allowed query sources are a separate registry in
-`hot-rank-web/hotrank/agent/`; adding ranking cards does not automatically enable
-these sources as agent search filters. This change prepares the catalog payload
-without changing the running API's Redis configuration.
+The companion API registers these sources and their agent query labels in
+`hot-rank-web/hotrank/source_catalog.py`. In that API's runtime, preview and apply
+the idempotent catalog merge:
+
+```bash
+docker exec hotrank python -m hotrank.source_catalog
+docker exec hotrank python -m hotrank.source_catalog --apply
+```
+
+The command preserves existing cards and order, extends an explicit agent
+allowlist with the new sources, and invalidates `rank` in one watched Redis
+transaction. It saves the previous registries under the reported backup key for
+seven days. An absent agent allowlist continues to use the application defaults.
+Restart the API after deploying its updated Python source registry.
 
 ## Entries still requiring a working public route
 
